@@ -49,12 +49,12 @@ output/
 *.swo
 
 # Jupyter Notebook
-.ipynb_checkpoints 
+.ipynb_checkpoints
 
+# Specific files and directories
 example.py
 api_client_example.py
 jayanta.pdf
 job.txt
-for_test
-output
-
+for_test/
+data_storage
