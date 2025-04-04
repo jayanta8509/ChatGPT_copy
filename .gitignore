@@ -58,3 +58,6 @@ jayanta.pdf
 job.txt
 for_test/
 data_storage
+main_w.py
+
+# server run :-    gunicorn main:app --bind 0.0.0.0:8545 --workers 3 --worker-class uvicorn.workers.UvicornWorker
