@@ -45,78 +45,72 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Create dictionaries to temporarily store data
+# Initialize empty dictionaries
 resume_sessions = {}
 jd_sessions = {}
 analysis_sessions = {}
 
-# Load from storage if available
+# Function to load session data from disk
 def load_sessions():
-    global resume_sessions, jd_sessions, analysis_sessions
+    # Use function-local variables for concurrency safety
+    resume_data = {}
+    jd_data = {}
+    analysis_data = {}
     
     # Load resume sessions
     try:
-        logger.info(f"Loading resume sessions from {RESUME_DATA_FILE}")
+        logger.debug(f"Loading resume sessions from {RESUME_DATA_FILE}")
         if os.path.exists(RESUME_DATA_FILE) and os.path.getsize(RESUME_DATA_FILE) > 0:
             with open(RESUME_DATA_FILE, 'r', encoding='utf-8') as f:
-                resume_sessions = json.load(f)
-            logger.info(f"Loaded {len(resume_sessions)} resume sessions from storage")
+                resume_data = json.load(f)
+            logger.debug(f"Loaded {len(resume_data)} resume sessions from storage")
         else:
             logger.warning(f"Resume sessions file does not exist or is empty: {RESUME_DATA_FILE}")
-            resume_sessions = {}
     except Exception as e:
         logger.error(f"Error loading resume sessions: {str(e)}")
-        resume_sessions = {}
     
     # Load JD sessions
     try:
-        logger.info(f"Loading JD sessions from {JD_DATA_FILE}")
+        logger.debug(f"Loading JD sessions from {JD_DATA_FILE}")
         if os.path.exists(JD_DATA_FILE) and os.path.getsize(JD_DATA_FILE) > 0:
             with open(JD_DATA_FILE, 'r', encoding='utf-8') as f:
-                jd_sessions = json.load(f)
-            logger.info(f"Loaded {len(jd_sessions)} JD sessions from storage")
+                jd_data = json.load(f)
+            logger.debug(f"Loaded {len(jd_data)} JD sessions from storage")
         else:
             logger.warning(f"JD sessions file does not exist or is empty: {JD_DATA_FILE}")
-            jd_sessions = {}
     except Exception as e:
         logger.error(f"Error loading JD sessions: {str(e)}")
-        jd_sessions = {}
     
     # Load analysis sessions
     try:
-        logger.info(f"Loading analysis sessions from {ANALYSIS_DATA_FILE}")
+        logger.debug(f"Loading analysis sessions from {ANALYSIS_DATA_FILE}")
         if os.path.exists(ANALYSIS_DATA_FILE) and os.path.getsize(ANALYSIS_DATA_FILE) > 0:
             with open(ANALYSIS_DATA_FILE, 'r', encoding='utf-8') as f:
-                analysis_sessions = json.load(f)
-            logger.info(f"Loaded {len(analysis_sessions)} analysis sessions from storage")
+                analysis_data = json.load(f)
+            logger.debug(f"Loaded {len(analysis_data)} analysis sessions from storage")
         else:
             logger.warning(f"Analysis sessions file does not exist or is empty: {ANALYSIS_DATA_FILE}")
-            analysis_sessions = {}
     except Exception as e:
         logger.error(f"Error loading analysis sessions: {str(e)}")
-        analysis_sessions = {}
-
-# Initial load of sessions
-load_sessions()
+    
+    return resume_data, jd_data, analysis_data
 
 # Function to save session data
-def save_sessions():
-    global resume_sessions, jd_sessions, analysis_sessions
-    
+def save_sessions(resume_data, jd_data, analysis_data):
     try:
-        logger.info(f"Saving {len(resume_sessions)} resume sessions to {RESUME_DATA_FILE}")
+        logger.debug(f"Saving {len(resume_data)} resume sessions to {RESUME_DATA_FILE}")
         with open(RESUME_DATA_FILE, 'w', encoding='utf-8') as f:
-            json.dump(resume_sessions, f, ensure_ascii=False, indent=2)
+            json.dump(resume_data, f, ensure_ascii=False, indent=2)
         
-        logger.info(f"Saving {len(jd_sessions)} JD sessions to {JD_DATA_FILE}")
+        logger.debug(f"Saving {len(jd_data)} JD sessions to {JD_DATA_FILE}")
         with open(JD_DATA_FILE, 'w', encoding='utf-8') as f:
-            json.dump(jd_sessions, f, ensure_ascii=False, indent=2)
+            json.dump(jd_data, f, ensure_ascii=False, indent=2)
         
-        logger.info(f"Saving {len(analysis_sessions)} analysis sessions to {ANALYSIS_DATA_FILE}")
+        logger.debug(f"Saving {len(analysis_data)} analysis sessions to {ANALYSIS_DATA_FILE}")
         with open(ANALYSIS_DATA_FILE, 'w', encoding='utf-8') as f:
-            json.dump(analysis_sessions, f, ensure_ascii=False, indent=2)
+            json.dump(analysis_data, f, ensure_ascii=False, indent=2)
         
-        logger.info("All session data saved to disk successfully")
+        logger.debug("All session data saved to disk successfully")
         return True
     except Exception as e:
         logger.error(f"Error saving session data: {str(e)}")
@@ -148,6 +142,9 @@ async def upload_resume(resume_file: UploadFile = File(...)):
     """Upload and process a resume file (PDF or DOCX)"""
     logger.info(f"Processing resume upload: {resume_file.filename}")
     
+    # Load current sessions
+    resume_sessions, jd_sessions, analysis_sessions = load_sessions()
+    
     # Check file extension
     file_extension = os.path.splitext(resume_file.filename)[1].lower()
     if file_extension not in ['.pdf', '.docx', '.txt']:
@@ -178,7 +175,7 @@ async def upload_resume(resume_file: UploadFile = File(...)):
             resume_sessions[resume_id] = result["resume_data"]
             
             # Save to disk
-            if save_sessions():
+            if save_sessions(resume_sessions, jd_sessions, analysis_sessions):
                 logger.info(f"Resume {resume_id} saved successfully")
             else:
                 logger.error(f"Failed to save resume {resume_id} to disk")
@@ -207,6 +204,9 @@ async def upload_jd(jd_data: JobDescription):
     """Process a job description provided as text"""
     logger.info("Processing job description upload")
     
+    # Load current sessions
+    resume_sessions, jd_sessions, analysis_sessions = load_sessions()
+    
     try:
         # Create a temporary file to store the job description text
         with tempfile.NamedTemporaryFile(delete=False, suffix='.txt', mode='w', encoding='utf-8') as temp_file:
@@ -229,7 +229,7 @@ async def upload_jd(jd_data: JobDescription):
             jd_sessions[jd_id] = result["jd_data"]
             
             # Save to disk
-            if save_sessions():
+            if save_sessions(resume_sessions, jd_sessions, analysis_sessions):
                 logger.info(f"JD {jd_id} saved successfully")
             else:
                 logger.error(f"Failed to save JD {jd_id} to disk")
@@ -258,6 +258,9 @@ async def analyze_match(match_request: MatchRequest):
     """Analyze how well the resume matches the job description"""
     logger.info(f"Analyzing match for resume {match_request.resume_id} and JD {match_request.jd_id}")
     
+    # Load current sessions
+    resume_sessions, jd_sessions, analysis_sessions = load_sessions()
+    
     # Check if both resume and JD data are available
     resume_id = match_request.resume_id
     jd_id = match_request.jd_id
@@ -266,16 +269,12 @@ async def analyze_match(match_request: MatchRequest):
     logger.debug(f"Current resume sessions: {list(resume_sessions.keys())}")
     logger.debug(f"Current JD sessions: {list(jd_sessions.keys())}")
     
-    # Try to reload sessions first to ensure we have the latest data
-    load_sessions()
-    
     if resume_id not in resume_sessions:
-        logger.warning(f"Resume with ID {resume_id} not found after reloading")
+        logger.warning(f"Resume with ID {resume_id} not found")
         raise HTTPException(status_code=404, detail=f"Resume with ID {resume_id} not found")
     
     if jd_id not in jd_sessions:
-        logger.warning(f"Job description with ID {jd_id} not found after reloading")
-        
+        logger.warning(f"Job description with ID {jd_id} not found")
         # Check if the data files exist and log details
         logger.debug(f"Checking JD file: {os.path.exists(JD_DATA_FILE)}")
         if os.path.exists(JD_DATA_FILE):
@@ -289,11 +288,7 @@ async def analyze_match(match_request: MatchRequest):
             except Exception as e:
                 logger.error(f"Failed to read JD file: {str(e)}")
         
-        # Allow new upload
-        raise HTTPException(
-            status_code=404, 
-            detail=f"Job description with ID {jd_id} not found. Please upload the job description again."
-        )
+        raise HTTPException(status_code=404, detail=f"Job description with ID {jd_id} not found")
     
     # Create a unique key for this analysis
     analysis_key = f"{resume_id}_{jd_id}"
@@ -309,7 +304,7 @@ async def analyze_match(match_request: MatchRequest):
             analysis_sessions[analysis_key] = result["match_analysis"]
             
             # Save to disk
-            if save_sessions():
+            if save_sessions(resume_sessions, jd_sessions, analysis_sessions):
                 logger.info(f"Analysis for {resume_id} and {jd_id} saved successfully")
             else:
                 logger.error(f"Failed to save analysis for {resume_id} and {jd_id} to disk")
@@ -329,25 +324,24 @@ async def chat(query: Query):
     """Chat with the AI about the resume and job description"""
     logger.info(f"Processing chat for resume {query.resume_id} and JD {query.jd_id}")
     
+    # Load current sessions
+    resume_sessions, jd_sessions, analysis_sessions = load_sessions()
+    
     resume_id = query.resume_id
     jd_id = query.jd_id
     
-    # Always reload sessions first to ensure we have the latest data
-    load_sessions()
-    
     # Check if resume data is available
     if resume_id not in resume_sessions:
-        logger.warning(f"Resume with ID {resume_id} not found after reloading")
+        logger.warning(f"Resume with ID {resume_id} not found")
         raise HTTPException(status_code=404, detail=f"Resume with ID {resume_id} not found")
     
     # Get JD data if an ID was provided
     jd_data = None
-    if jd_id:
-        if jd_id in jd_sessions:
-            jd_data = jd_sessions[jd_id]
-        else:
-            logger.warning(f"Job description with ID {jd_id} not found after reloading")
-            raise HTTPException(status_code=404, detail=f"Job description with ID {jd_id} not found")
+    if jd_id and jd_id in jd_sessions:
+        jd_data = jd_sessions[jd_id]
+    elif jd_id:
+        logger.warning(f"Job description with ID {jd_id} not found")
+        raise HTTPException(status_code=404, detail=f"Job description with ID {jd_id} not found")
     
     # Get analysis data if available
     analysis_data = None
@@ -370,7 +364,7 @@ async def chat(query: Query):
         if result.get("updated_resume_data"):
             resume_sessions[resume_id] = result["updated_resume_data"]
             # Save to disk
-            if save_sessions():
+            if save_sessions(resume_sessions, jd_sessions, analysis_sessions):
                 logger.info(f"Updated resume {resume_id} saved successfully")
             else:
                 logger.error(f"Failed to save updated resume {resume_id} to disk")
@@ -391,11 +385,11 @@ async def clear_specific_session(clear_request: ClearSessionRequest):
     """Clear a specific resume-JD session combination"""
     logger.info(f"Clearing session for resume {clear_request.resume_id} and JD {clear_request.jd_id}")
     
+    # Load current sessions
+    resume_sessions, jd_sessions, analysis_sessions = load_sessions()
+    
     resume_id = clear_request.resume_id
     jd_id = clear_request.jd_id
-    
-    # Always reload sessions first to ensure we have the latest data
-    load_sessions()
     
     # Check if IDs exist
     resume_exists = resume_id in resume_sessions
@@ -415,7 +409,7 @@ async def clear_specific_session(clear_request: ClearSessionRequest):
         logger.info(f"Deleted analysis for {resume_id} and {jd_id}")
     
     # Save changes to disk
-    if save_sessions():
+    if save_sessions(resume_sessions, jd_sessions, analysis_sessions):
         logger.info(f"Session changes saved successfully")
     else:
         logger.error(f"Failed to save session changes to disk")
@@ -435,8 +429,8 @@ async def list_resumes():
     """List all available resume IDs with names"""
     logger.info("Listing all resumes")
     
-    # Always reload sessions first to ensure we have the latest data
-    load_sessions()
+    # Load current sessions
+    resume_sessions, _, _ = load_sessions()
     
     resume_list = []
     for resume_id, resume_data in resume_sessions.items():
@@ -456,8 +450,8 @@ async def list_jds():
     """List all available job description IDs with titles"""
     logger.info("Listing all job descriptions")
     
-    # Always reload sessions first to ensure we have the latest data
-    load_sessions()
+    # Load current sessions
+    _, jd_sessions, _ = load_sessions()
     
     jd_list = []
     for jd_id, jd_data in jd_sessions.items():
@@ -477,8 +471,8 @@ async def debug_sessions():
     """Debug endpoint to check the current state of sessions"""
     logger.info("Debug session state requested")
     
-    # Always reload sessions first to ensure we have the latest data
-    load_sessions()
+    # Load current sessions
+    resume_sessions, jd_sessions, analysis_sessions = load_sessions()
     
     return {
         "resume_sessions": list(resume_sessions.keys()),
@@ -500,27 +494,10 @@ async def debug_sessions():
         }
     }
 
-@app.post("/reload-sessions/", response_model=StatusResponse)
-async def reload_sessions():
-    """Force reload of all sessions from disk"""
-    logger.info("Force reloading sessions from disk")
-    load_sessions()
-    return {
-        "status": "success",
-        "message": f"Sessions reloaded: {len(resume_sessions)} resumes, {len(jd_sessions)} JDs, {len(analysis_sessions)} analyses"
-    }
-
 @app.post("/reset-data-store/", response_model=StatusResponse)
 async def reset_data_store():
     """Reset all data storage and create new empty files"""
     logger.warning("Resetting all data storage files")
-    
-    global resume_sessions, jd_sessions, analysis_sessions
-    
-    # Clear in-memory data
-    resume_sessions = {}
-    jd_sessions = {}
-    analysis_sessions = {}
     
     # Create empty JSON files
     try:
@@ -548,12 +525,12 @@ async def reset_data_store():
 def dev():
     """Run the server in development mode"""
     logger.info("Starting server in development mode")
-    uvicorn.run("main.py:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
 
 def prod():
     """Run the server in production mode"""
     logger.info("Starting server in production mode")
-    uvicorn.run("main.py:app", host="0.0.0.0", port=8000)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000)
 
 if __name__ == "__main__":
     import sys
