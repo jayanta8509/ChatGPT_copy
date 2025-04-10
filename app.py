@@ -299,14 +299,6 @@ class ResumeParsingBot:
             parsed_data["resume_file"] = file_name
             parsed_data["upload_date"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
-            # Add empty status fields that will be updated later
-            parsed_data["ai_rating"] = 0
-            parsed_data["ai_shortlisted"] = "No"
-            parsed_data["internal_shortlisted"] = "No"
-            parsed_data["interview_in_process"] = "No"
-            parsed_data["final_result"] = "Pending"
-            parsed_data["candidate_joined"] = "No"
-            
             # Calculate token usage
             tokens_used = response.usage.total_tokens
             cost = self._calculate_cost(tokens_used)
@@ -577,12 +569,12 @@ class ResumeParsingBot:
             "1. Suggested role": "SuggestedRole",
             "suggested_role": "SuggestedRole",
             
-            # Match score variations
-            "2. Match score": "MatchScore",
-            "Match score": "MatchScore",
-            "Score": "MatchScore",
-            "2. Score": "MatchScore",
-            "match_score": "MatchScore",
+            # Match score variations - map to AIRating instead
+            "2. Match score": "AIRating",
+            "Match score": "AIRating",
+            "Score": "AIRating",
+            "2. Score": "AIRating",
+            "match_score": "AIRating",
             
             # Shortlist variations
             "3. Whether the candidate should be shortlisted": "ShouldBeShortlisted",
@@ -626,12 +618,12 @@ class ResumeParsingBot:
             "8. Education": "EducationAssessment",
             "education_assessment": "EducationAssessment",
             
-            # Overall rating variations
-            "9. Overall rating": "OverallRating",
-            "Overall rating": "OverallRating",
-            "Rating": "OverallRating",
-            "9. Rating": "OverallRating",
-            "overall_rating": "OverallRating",
+            # Overall rating variations - map to AIRating instead
+            "9. Overall rating": "AIRating",
+            "Overall rating": "AIRating",
+            "Rating": "AIRating",
+            "9. Rating": "AIRating",
+            "overall_rating": "AIRating",
             
             # Missing expectations variations
             "10. Anything missing as per expectations in the JD": "MissingExpectations",
@@ -645,22 +637,31 @@ class ResumeParsingBot:
             "Overall recommendation": "OverallRecommendation",
             "Recommendation": "OverallRecommendation",
             "11. Recommendation": "OverallRecommendation",
-            "overall_recommendation": "OverallRecommendation"
+            "overall_recommendation": "OverallRecommendation",
+
+            # AI Rating variations (in case it's directly provided)
+            "AIRating": "AIRating",
+            "AI Rating": "AIRating",
+            "AI rating": "AIRating"
         }
         
         # Standard fields that should be included
         standard_fields = [
             "SuggestedRole",
-            "MatchScore", 
+            "AIRating", 
             "ShouldBeShortlisted",
             "CompanyTypeMatch",
             "BusinessTypeMatch",
             "StabilityAssessment",
             "CompanyAnalysis",
             "EducationAssessment",
-            "OverallRating",
             "MissingExpectations",
-            "OverallRecommendation"
+            "OverallRecommendation",
+            "AIShortlisted", 
+            "InternalShortlisted",
+            "InterviewInProcess",
+            "FinalResult",
+            "CandidateJoined"
         ]
         
         # Normalize the main fields
@@ -673,10 +674,28 @@ class ResumeParsingBot:
                     break
             
             if normalized_field:
-                normalized_data[normalized_field] = value
+                # If it's a rating field and we already have a rating, take the higher value
+                if normalized_field == "AIRating" and "AIRating" in normalized_data:
+                    # Get the existing value
+                    existing_value = normalized_data["AIRating"]
+                    
+                    # Try to convert both to numbers for comparison
+                    try:
+                        existing_numeric = float(existing_value) if existing_value is not None else 0
+                        new_numeric = float(value) if value is not None else 0
+                        
+                        # Keep the higher value
+                        normalized_data["AIRating"] = max(existing_numeric, new_numeric)
+                    except (ValueError, TypeError):
+                        # If conversion fails, keep the original
+                        pass
+                else:
+                    normalized_data[normalized_field] = value
             else:
-                # Keep original field if no mapping exists
-                normalized_data[field] = value
+                # Skip MatchScore and OverallRating since we're consolidating
+                if field.lower() not in ["matchscore", "overallrating"]:
+                    # Keep original field if no mapping exists
+                    normalized_data[field] = value
         
         # Normalize nested fields in company analysis if it exists
         company_analysis_key = None
@@ -732,7 +751,7 @@ class ResumeParsingBot:
         # Ensure all standard fields exist with appropriate default values
         for field in standard_fields:
             if field not in normalized_data:
-                if field == "MatchScore" or field == "OverallRating":
+                if field == "AIRating":
                     normalized_data[field] = 0
                 elif field == "ShouldBeShortlisted":
                     normalized_data[field] = "No"
@@ -749,40 +768,34 @@ class ResumeParsingBot:
                     normalized_data[field] = "Not provided"
         
         # Ensure numeric fields are actually numbers
-        if "MatchScore" in normalized_data and not isinstance(normalized_data["MatchScore"], (int, float)):
+        if "AIRating" in normalized_data and not isinstance(normalized_data["AIRating"], (int, float)):
             try:
-                normalized_data["MatchScore"] = int(normalized_data["MatchScore"])
+                normalized_data["AIRating"] = int(normalized_data["AIRating"])
             except (ValueError, TypeError):
                 try:
                     # Try to extract a number from a string like "7 out of 10"
                     import re
-                    match = re.search(r'(\d+)', str(normalized_data["MatchScore"]))
+                    match = re.search(r'(\d+)', str(normalized_data["AIRating"]))
                     if match:
-                        normalized_data["MatchScore"] = int(match.group(1))
+                        normalized_data["AIRating"] = int(match.group(1))
                     else:
-                        normalized_data["MatchScore"] = 0
+                        normalized_data["AIRating"] = 0
                 except:
-                    normalized_data["MatchScore"] = 0
+                    normalized_data["AIRating"] = 0
         
-        if "OverallRating" in normalized_data and not isinstance(normalized_data["OverallRating"], (int, float)):
-            try:
-                normalized_data["OverallRating"] = int(normalized_data["OverallRating"])
-            except (ValueError, TypeError):
-                try:
-                    # Try to extract a number from a string like "7 out of 10"
-                    import re
-                    match = re.search(r'(\d+)', str(normalized_data["OverallRating"]))
-                    if match:
-                        normalized_data["OverallRating"] = int(match.group(1))
-                    else:
-                        normalized_data["OverallRating"] = 0
-                except:
-                    normalized_data["OverallRating"] = 0
+        # Remove MatchScore and OverallRating if they were added somehow
+        if "MatchScore" in normalized_data:
+            del normalized_data["MatchScore"]
+            
+        if "OverallRating" in normalized_data:
+            del normalized_data["OverallRating"]
         
         # Copy any remaining metadata fields
         for field in data:
-            if field not in field_mappings and field not in normalized_data:
-                normalized_data[field] = data[field]
+            if field.lower() not in [key.lower() for key in field_mappings] and field not in normalized_data:
+                # Skip MatchScore and OverallRating
+                if field.lower() not in ["matchscore", "overallrating"]:
+                    normalized_data[field] = data[field]
         
         # Ensure ShouldBeShortlisted is Yes/No 
         if "ShouldBeShortlisted" in normalized_data:
@@ -811,7 +824,7 @@ class ResumeParsingBot:
         You are an expert recruitment assistant. Analyze how well the candidate matches the job description.
         Provide the following:
         1. Suggested role for the candidate (e.g., Frontend, Backend, DevOps, etc.)
-        2. Match score (1-10)
+        2. AI Rating (1-10) - a score that indicates how well the candidate matches the job
         3. Whether the candidate should be shortlisted (Yes/No)
         4. Company type match (Product/Service)
         5. Business type match (B2B/B2C)
@@ -825,14 +838,19 @@ class ResumeParsingBot:
         8. Education assessment:
            - College/University assessment
            - Course relevance
-        9. Overall rating (1-10)
-        10. Anything missing as per expectations in the JD
-        11. Overall recommendation (detailed assessment)
+        9. Anything missing as per expectations in the JD
+        10. Overall recommendation (detailed assessment)
+        11. Candidate status prediction:
+           - Should be AI shortlisted (Yes/No)
+           - Should be internally shortlisted (Yes/No)
+           - Ready for interview process (Yes/No)
+           - Final result prediction (Selected/Rejected/Pending)
+           - Likelihood of joining if offered (High/Medium/Low)
         
         Format your response as a JSON object with the following structure:
         {
           "SuggestedRole": "string",
-          "MatchScore": number,
+          "AIRating": number,
           "ShouldBeShortlisted": "Yes/No",
           "CompanyTypeMatch": "string",
           "BusinessTypeMatch": "string",
@@ -850,10 +868,22 @@ class ResumeParsingBot:
             "UniversityAssessment": "string",
             "CourseRelevance": "string"
           },
-          "OverallRating": number,
           "MissingExpectations": ["string"],
-          "OverallRecommendation": "string"
+          "OverallRecommendation": "string",
+          "AIShortlisted": "Yes/No",
+          "InternalShortlisted": "Yes/No",
+          "InterviewInProcess": "Yes/No",
+          "FinalResult": "Selected/Rejected/Pending",
+          "CandidateJoined": "Yes/No/Unknown"
         }
+        
+        For the candidate status prediction:
+        - AIRating should be a number from 1-10 reflecting how well the candidate matches the job
+        - AIShortlisted should be "Yes" if the AIRating is 7 or higher, otherwise "No"
+        - InternalShortlisted should be your recommendation based on the candidate's fit
+        - InterviewInProcess should be "Yes" if you recommend they proceed to interviews
+        - FinalResult should be "Selected" if they're an excellent match, "Rejected" if poor match, "Pending" if moderate
+        - CandidateJoined should be your prediction of whether they'd join if offered
         """
         
         try:
@@ -870,6 +900,36 @@ class ResumeParsingBot:
             
             # Normalize the fields to ensure consistency
             analysis = self._normalize_match_analysis(analysis)
+            
+            # Add AI status fields if not present
+            if "AIRating" not in analysis:
+                analysis["AIRating"] = 0
+            
+            if "AIShortlisted" not in analysis:
+                # Default based on AIRating
+                analysis["AIShortlisted"] = "Yes" if analysis.get("AIRating", 0) >= 7 else "No"
+                
+            if "InternalShortlisted" not in analysis:
+                # Default based on ShouldBeShortlisted
+                analysis["InternalShortlisted"] = analysis.get("ShouldBeShortlisted", "No")
+                
+            if "InterviewInProcess" not in analysis:
+                # Default based on ShouldBeShortlisted
+                analysis["InterviewInProcess"] = analysis.get("ShouldBeShortlisted", "No")
+                
+            if "FinalResult" not in analysis:
+                # Default based on AIRating
+                ai_rating = analysis.get("AIRating", 0)
+                if ai_rating >= 8:
+                    analysis["FinalResult"] = "Selected"
+                elif ai_rating <= 4:
+                    analysis["FinalResult"] = "Rejected"
+                else:
+                    analysis["FinalResult"] = "Pending"
+                    
+            if "CandidateJoined" not in analysis:
+                # Default to unknown
+                analysis["CandidateJoined"] = "Unknown"
             
             # Calculate token usage
             tokens_used = response.usage.total_tokens
