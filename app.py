@@ -109,23 +109,51 @@ class ResumeParsingBot:
                     field_lower = field.lower()
                     
                     # Map experience fields
-                    if field_lower in ['company_name', 'company']:
+                    if field_lower in ['companyname', 'company name', 'company']:
                         normalized_exp['CompanyName'] = value
                     elif field_lower in ['position', 'role', 'job_title', 'title']:
                         normalized_exp['Position'] = value
                     elif field_lower in ['duration', 'period', 'tenure']:
                         # Check if duration is already structured
-                        if isinstance(value, dict) and ('start_date' in value or 'end_date' in value):
-                            normalized_exp['Duration'] = value
+                        if isinstance(value, dict):
+                            # Check for variations of start/end date keys
+                            has_start_key = False
+                            has_end_key = False
+                            
+                            normalized_duration = {}
+                            for dk, dv in value.items():
+                                try:
+                                    dk_lower = dk.lower()  # Make sure dk is a string
+                                    if 'start' in dk_lower:
+                                        normalized_duration['StartDate'] = dv
+                                        has_start_key = True
+                                    elif 'end' in dk_lower:
+                                        normalized_duration['EndDate'] = dv
+                                        has_end_key = True
+                                    else:
+                                        normalized_duration[dk] = dv
+                                except AttributeError:
+                                    # If the key is not a string, use it as is
+                                    normalized_duration[dk] = dv
+                            
+                            # Ensure the standard keys exist
+                            if not has_start_key:
+                                normalized_duration['StartDate'] = "Not specified"
+                            if not has_end_key:
+                                normalized_duration['EndDate'] = "Not specified"
+                                
+                            normalized_exp['Duration'] = normalized_duration
                         else:
                             # Try to parse the duration string
                             normalized_exp['Duration'] = self._parse_duration(value)
-                    elif field_lower in ['product_or_service', 'company_type']:
+                    elif field_lower in ['product_or_service', 'company_type', 'companytype', 'type of company']:
                         normalized_exp['CompanyType'] = value
-                    elif field_lower in ['business_type']:
+                    elif field_lower in ['business_type', 'businesstype', 'business model']:
                         normalized_exp['BusinessType'] = value
-                    elif field_lower in ['number_of_employees', 'employee_count', 'size']:
+                    elif field_lower in ['number_of_employees', 'employee_count', 'size', 'company size', 'employees']:
                         normalized_exp['NumberOfEmployees'] = value
+                    elif field_lower in ['company_revenue', 'revenue', 'turnover', 'annual revenue']:
+                        normalized_exp['CompanyRevenue'] = value
                     elif field_lower in ['funding_received', 'funding', 'investment']:
                         normalized_exp['Funding'] = value
                     elif field_lower in ['company_location', 'location']:
@@ -204,17 +232,42 @@ class ResumeParsingBot:
             # Common formats: "Jan 2020 - Present", "2018-2020", "Mar 2019 to Dec 2021"
             duration_string = duration_string.replace('–', '-')  # Standardize dash
             
+            # Check for date ranges
             if ' to ' in duration_string:
                 parts = duration_string.split(' to ')
             elif ' - ' in duration_string:
                 parts = duration_string.split(' - ')
             elif '-' in duration_string:
-                parts = duration_string.split('-')
+                # Be careful with date formats like "Jan-2020" which shouldn't be split
+                if not any(month in duration_string.lower() for month in 
+                          ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']):
+                    parts = duration_string.split('-')
+                else:
+                    # Check if there's a month-year pattern on both sides of the dash
+                    import re
+                    date_pattern = r'(?:[a-z]{3}|\d{1,2})[- ](?:\d{2}|\d{4})'
+                    matches = re.findall(date_pattern, duration_string.lower())
+                    if len(matches) >= 2:
+                        # Try to split with a more specific pattern
+                        parts_match = re.search(r'(.+) ?- ?(.+)', duration_string)
+                        if parts_match:
+                            parts = [parts_match.group(1).strip(), parts_match.group(2).strip()]
+                        else:
+                            return {"StartDate": duration_string, "EndDate": "Not specified"}
+                    else:
+                        return {"StartDate": duration_string, "EndDate": "Not specified"}
             else:
                 return {"StartDate": duration_string, "EndDate": "Not specified"}
             
             if len(parts) == 2:
-                return {"StartDate": parts[0].strip(), "EndDate": parts[1].strip()}
+                start = parts[0].strip()
+                end = parts[1].strip()
+                
+                # Check for "Present" or "Current" in end date
+                if end.lower() in ['present', 'current', 'now', 'ongoing']:
+                    end = "Present"
+                
+                return {"StartDate": start, "EndDate": end}
             else:
                 return {"StartDate": duration_string, "EndDate": "Not specified"}
         except:
@@ -235,10 +288,11 @@ class ResumeParsingBot:
         5. For each company experience:
            - Company name
            - Position/role
-           - Duration (start date and end date)
+           - Duration (specify EXACT start date and end date in the same format they appear in the resume)
            - Whether it's a product or service company
            - Business type (B2B or B2C if discernible)
            - Number of employees (if mentioned or can be inferred)
+           - Company revenue or turnover (if mentioned)
            - Funding received and type of funding (if mentioned)
            - Company main location
         6. Education details:
@@ -258,12 +312,13 @@ class ResumeParsingBot:
               "CompanyName": "string",
               "Position": "string",
               "Duration": {
-                "StartDate": "string",
-                "EndDate": "string"
+                "StartDate": "string (EXACT as in resume)",
+                "EndDate": "string (EXACT as in resume)"
               },
               "CompanyType": "string",
               "BusinessType": "string",
               "NumberOfEmployees": "string or null",
+              "CompanyRevenue": "string or null",
               "Funding": "string or null",
               "Location": "string"
             }
@@ -277,6 +332,13 @@ class ResumeParsingBot:
           ],
           "StabilityAssessment": "string"
         }
+        
+        IMPORTANT INSTRUCTIONS:
+        1. Extract dates EXACTLY as they appear in the resume without reformatting
+        2. For Duration, maintain the exact format from the resume (e.g., "Jan 2020 - Mar 2022", "2019-Present")
+        3. If a field is not present or cannot be determined, use null rather than making assumptions
+        4. Do not add extra fields that aren't in the resume
+        5. For company information like size and revenue, only include if explicitly mentioned
         """
         
         try:
