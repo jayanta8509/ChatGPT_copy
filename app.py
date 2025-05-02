@@ -390,6 +390,11 @@ class ResumeParsingBot:
         
         # Define field mappings (from possible GPT variations -> standard field)
         field_mappings = {
+            # Company name variations
+            'company_name': 'CompanyName',
+            'company': 'CompanyName',
+            'employer': 'CompanyName',
+            'organization': 'CompanyName',
             # Job title variations
             'job_title': 'JobTitle',
             'Job title': 'JobTitle',
@@ -440,6 +445,7 @@ class ResumeParsingBot:
         
         # Standard fields that should be included
         standard_fields = [
+            'CompanyName',
             'JobTitle',
             'RequiredSkills',
             'YearsOfExperienceRequired',
@@ -531,6 +537,8 @@ class ResumeParsingBot:
                     }
                 elif field == 'OtherImportantRequirements':
                     normalized_data[field] = []
+                elif field == 'CompanyName':
+                    normalized_data[field] = None
                 else:
                     normalized_data[field] = None
         
@@ -549,17 +557,19 @@ class ResumeParsingBot:
         # Use GPT-4o to extract structured information
         system_prompt = """
         You are an expert job description analyst. Extract the following information:
-        1. Job title
-        2. Required skills (technical and soft skills)
-        3. Years of experience required
-        4. Education requirements
-        5. Company type preference (Product/Service if mentioned)
-        6. Business type preference (B2B/B2C if mentioned)
-        7. Preferred stability (years in previous companies if mentioned)
-        8. Other important requirements
+        1. Company name (if mentioned)
+        2. Job title
+        3. Required skills (technical and soft skills)
+        4. Years of experience required
+        5. Education requirements
+        6. Company type preference (Product/Service if mentioned)
+        7. Business type preference (B2B/B2C if mentioned)
+        8. Preferred stability (years in previous companies if mentioned)
+        9. Other important requirements
         
         Format your response as a JSON object with the following structure:
         {
+          "CompanyName": "string or null",
           "JobTitle": "string",
           "RequiredSkills": {
             "technical": ["skill1", "skill2", ...],
