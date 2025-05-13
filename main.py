@@ -245,6 +245,7 @@ async def analyze_match(match_request: MatchRequest):
             "Experience": resume_info.get("experience", []),
             "Education": resume_info.get("education_details", []),
             "StabilityAssessment": resume_info.get("overall_stability_assessment"),
+            "TotalYearsOfExperience": resume_info.get("total_years_of_experience", 0.0),
             "resume_file": resume_info.get("resume_file"),
             "upload_date": resume_info.get("upload_date")
         }
@@ -330,6 +331,7 @@ async def chat(query: Query):
             "Experience": resume_info.get("experience", []),
             "Education": resume_info.get("education_details", []),
             "StabilityAssessment": resume_info.get("overall_stability_assessment"),
+            "TotalYearsOfExperience": resume_info.get("total_years_of_experience", 0.0),
             "resume_file": resume_info.get("resume_file"),
             "upload_date": resume_info.get("upload_date")
         }

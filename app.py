@@ -356,6 +356,10 @@ class ResumeParsingBot:
             # Normalize the fields to ensure consistency
             parsed_data = self._normalize_resume_fields(parsed_data)
             
+            # Calculate total years of experience
+            total_experience = self._calculate_total_experience(parsed_data.get("Experience", []))
+            parsed_data["TotalYearsOfExperience"] = total_experience
+            
             # Add file information to the result
             file_name = os.path.basename(resume_file_path)
             parsed_data["resume_file"] = file_name
@@ -1175,6 +1179,105 @@ class ResumeParsingBot:
             self.logger.error(f"Error extracting text: {str(e)}")
             return f"Error extracting text: {str(e)}"
     
+    def _calculate_total_experience(self, experience_list):
+        """Calculate total years of experience from the experience list"""
+        if not experience_list or not isinstance(experience_list, list):
+            return 0.0
+            
+        total_years = 0.0
+        
+        for exp in experience_list:
+            # Extract duration information
+            duration = exp.get("Duration", {})
+            if not duration or not isinstance(duration, dict):
+                continue
+                
+            start_date = duration.get("StartDate", "")
+            end_date = duration.get("EndDate", "")
+            
+            # Skip if either date is missing
+            if not start_date or not end_date:
+                continue
+                
+            # Handle 'Present' or 'Current' in end date
+            if end_date.lower() in ['present', 'current', 'now', 'ongoing']:
+                end_date = datetime.datetime.now().strftime("%b %Y")
+                
+            # Try to parse the dates
+            try:
+                years_in_job = self._calculate_years_between_dates(start_date, end_date)
+                total_years += years_in_job
+            except:
+                # If date parsing fails, skip this entry
+                continue
+                
+        # Round to 1 decimal place for better readability
+        return round(total_years, 1)
+        
+    def _calculate_years_between_dates(self, start_date_str, end_date_str):
+        """Calculate years between two date strings in various formats"""
+        # Common date formats
+        date_formats = [
+            "%b %Y",       # Jan 2020
+            "%B %Y",       # January 2020
+            "%m/%Y",       # 01/2020
+            "%m-%Y",       # 01-2020
+            "%Y-%m",       # 2020-01
+            "%Y",          # 2020
+            "%m/%d/%Y",    # 01/15/2020
+            "%d/%m/%Y",    # 15/01/2020
+            "%Y-%m-%d",    # 2020-01-15
+            "%b %d, %Y",   # Jan 15, 2020
+            "%B %d, %Y",   # January 15, 2020
+            "%d %b %Y",    # 15 Jan 2020
+            "%d %B %Y"     # 15 January 2020
+        ]
+        
+        # Try to parse the start date
+        start_date = None
+        for fmt in date_formats:
+            try:
+                start_date = datetime.datetime.strptime(start_date_str, fmt)
+                break
+            except:
+                continue
+                
+        # Try to parse the end date
+        end_date = None
+        for fmt in date_formats:
+            try:
+                end_date = datetime.datetime.strptime(end_date_str, fmt)
+                break
+            except:
+                continue
+                
+        # If parsing failed, try to extract years only
+        if not start_date or not end_date:
+            # Try to extract just years (e.g., from "2018-2020")
+            try:
+                start_year = int(''.join(filter(str.isdigit, start_date_str)))
+                end_year = int(''.join(filter(str.isdigit, end_date_str)))
+                if 1900 <= start_year <= 2100 and 1900 <= end_year <= 2100:
+                    if end_year < start_year:  # Handle cases like "20-22" meaning 2020-2022
+                        # Assume it's a two-digit year
+                        if start_year < 100:
+                            start_year += 2000
+                        if end_year < 100:
+                            end_year += 2000
+                    return end_year - start_year
+            except:
+                pass
+                
+            # If all parsing attempts fail, return 0
+            return 0
+            
+        # Calculate the difference in years (including partial years)
+        delta = end_date - start_date
+        years = delta.days / 365.25
+        
+        # Return the years, ensuring it's never negative
+        return max(0, years)
+        
     def _calculate_cost(self, tokens):
         """Calculate cost based on token usage"""
         # GPT-4o pricing (example - adjust based on actual pricing)
