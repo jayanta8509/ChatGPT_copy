@@ -406,6 +406,13 @@ class ResumeParsingBot:
             'position': 'JobTitle',
             'role': 'JobTitle',
             
+            # Job location variations
+            'job_location': 'JobLocation',
+            'location': 'JobLocation',
+            'work_location': 'JobLocation',
+            'office_location': 'JobLocation',
+            'workplace': 'JobLocation',
+            
             # Skills variations
             'Required skills': 'RequiredSkills',
             'skills': 'RequiredSkills',
@@ -451,6 +458,7 @@ class ResumeParsingBot:
         standard_fields = [
             'CompanyName',
             'JobTitle',
+            'JobLocation',
             'RequiredSkills',
             'YearsOfExperienceRequired',
             'EducationRequirements',
@@ -543,6 +551,8 @@ class ResumeParsingBot:
                     normalized_data[field] = []
                 elif field == 'CompanyName':
                     normalized_data[field] = None
+                elif field == 'JobLocation':
+                    normalized_data[field] = None
                 else:
                     normalized_data[field] = None
         
@@ -563,18 +573,20 @@ class ResumeParsingBot:
         You are an expert job description analyst. Extract the following information:
         1. Company name (if mentioned)
         2. Job title
-        3. Required skills (technical and soft skills)
-        4. Years of experience required
-        5. Education requirements
-        6. Company type preference (Product/Service if mentioned)
-        7. Business type preference (B2B/B2C if mentioned)
-        8. Preferred stability (years in previous companies if mentioned)
-        9. Other important requirements
+        3. Job location (city, country, remote status)
+        4. Required skills (technical and soft skills)
+        5. Years of experience required
+        6. Education requirements
+        7. Company type preference (Product/Service if mentioned)
+        8. Business type preference (B2B/B2C if mentioned)
+        9. Preferred stability (years in previous companies if mentioned)
+        10. Other important requirements
         
         Format your response as a JSON object with the following structure:
         {
           "CompanyName": "string or null",
           "JobTitle": "string",
+          "JobLocation": "string",
           "RequiredSkills": {
             "technical": ["skill1", "skill2", ...],
             "soft": ["skill1", "skill2", ...]

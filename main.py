@@ -253,6 +253,7 @@ async def analyze_match(match_request: MatchRequest):
         cleaned_jd = {
             "CompanyName": jd_info.get("company_name"),
             "JobTitle": jd_info.get("job_title"),
+            "JobLocation": jd_info.get("job_location"),
             "RequiredSkills": jd_info.get("required_skills", {"technical": [], "soft": []}),
             "YearsOfExperienceRequired": jd_info.get("years_of_experience_required"),
             "EducationRequirements": jd_info.get("education_requirements"),
@@ -359,6 +360,7 @@ async def chat(query: Query):
             cleaned_jd = {
                 "CompanyName": jd_info.get("company_name"),
                 "JobTitle": jd_info.get("job_title"),
+                "JobLocation": jd_info.get("job_location"),
                 "RequiredSkills": jd_info.get("required_skills", {"technical": [], "soft": []}),
                 "YearsOfExperienceRequired": jd_info.get("years_of_experience_required"),
                 "EducationRequirements": jd_info.get("education_requirements"),
