@@ -6,14 +6,19 @@ import json
 import PyPDF2
 import docx
 import datetime
+import requests
+import re
 
 # Load environment variables
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
+google_search_api_key = os.getenv("GOOGLE_SEARCH_API_KEY")
+google_search_engine_id = os.getenv("GOOGLE_SEARCH_ENGINE_ID")
 
 class ResumeParsingBot:
-    def __init__(self):
+    def __init__(self, enrich_company_info=True):
         self.logger = self._setup_logger()
+        self.enrich_company_info = enrich_company_info
         
     def _setup_logger(self):
         logger = logging.getLogger("resume_parser")
@@ -23,6 +28,283 @@ class ResumeParsingBot:
         handler.setFormatter(formatter)
         logger.addHandler(handler)
         return logger
+    
+    def _fetch_company_info(self, company_name):
+        """Fetch company information using Google Search API"""
+        if not company_name or company_name.strip() == "":
+            return {}
+        
+        # Handle well-known companies with predefined information
+        known_companies = {
+            "amazon": {
+                "BusinessType": "B2C/B2B",
+                "NumberOfEmployees": "1,500,000+",
+                "CompanyRevenue": "$513B annually (2023)",
+                "Funding": "Public company (NASDAQ: AMZN), IPO 1997"
+            },
+            "google": {
+                "BusinessType": "B2C/B2B",
+                "NumberOfEmployees": "180,000+",
+                "CompanyRevenue": "$280B annually (2023)",
+                "Funding": "Public company (NASDAQ: GOOGL), IPO 2004"
+            },
+            "microsoft": {
+                "BusinessType": "B2B/B2C",
+                "NumberOfEmployees": "220,000+",
+                "CompanyRevenue": "$200B annually (2023)",
+                "Funding": "Public company (NASDAQ: MSFT), IPO 1986"
+            },
+            "meta": {
+                "BusinessType": "B2C/B2B",
+                "NumberOfEmployees": "87,000+",
+                "CompanyRevenue": "$120B annually (2023)",
+                "Funding": "Public company (NASDAQ: META), IPO 2012"
+            },
+            "apple": {
+                "BusinessType": "B2C/B2B",
+                "NumberOfEmployees": "165,000+",
+                "CompanyRevenue": "$390B annually (2023)",
+                "Funding": "Public company (NASDAQ: AAPL), IPO 1980"
+            },
+            "moneyview": {
+                "BusinessType": "B2C",
+                "NumberOfEmployees": "500-1000",
+                "CompanyRevenue": "Rs 577 crore annually",
+                "Funding": "Series E, $75M raised"
+            },
+            "flipkart": {
+                "BusinessType": "B2C",
+                "NumberOfEmployees": "50,000+",
+                "CompanyRevenue": "$20B+ GMV annually",
+                "Funding": "Private, $37B valuation"
+            },
+            "zomato": {
+                "BusinessType": "B2C/B2B",
+                "NumberOfEmployees": "5,000+",
+                "CompanyRevenue": "Rs 4,200 crore annually",
+                "Funding": "Public company (NSE: ZOMATO), IPO 2021"
+            },
+            "paytm": {
+                "BusinessType": "B2C/B2B",
+                "NumberOfEmployees": "8,000+",
+                "CompanyRevenue": "Rs 5,000+ crore annually",
+                "Funding": "Public company (NSE: PAYTM), IPO 2021"
+            }
+        }
+        
+        # Check if this is a well-known company
+        company_lower = company_name.lower().strip()
+        
+        # Check for Amazon variations
+        if any(term in company_lower for term in ["amazon", "amzn"]):
+            self.logger.info(f"Using predefined info for Amazon: {company_name}")
+            return known_companies["amazon"]
+        
+        # Check for other known companies
+        for known_name, company_data in known_companies.items():
+            if known_name in company_lower:
+                self.logger.info(f"Using predefined info for well-known company: {company_name}")
+                return company_data
+        
+        try:
+            # Google Search API configuration
+            api_key = google_search_api_key
+            search_engine_id = google_search_engine_id
+            base_url = "https://www.googleapis.com/customsearch/v1"
+            
+            # Multiple search queries for better coverage
+            search_queries = [
+                f"{company_name} company employees headcount workforce size",
+                f"{company_name} annual revenue earnings financial results",
+                f"{company_name} business model B2B B2C customers enterprise consumer",
+                f"{company_name} funding valuation series round IPO public private",
+                f"{company_name} company profile about overview"
+            ]
+            
+            all_search_text = ""
+            
+            for query in search_queries:
+                try:
+                    params = {
+                        'key': api_key,
+                        'cx': search_engine_id,
+                        'q': query,
+                        'num': 3,  # Fewer results per query but more queries
+                        'safe': 'active'
+                    }
+                    
+                    self.logger.info(f"Searching: {query}")
+                    
+                    response = requests.get(base_url, params=params, timeout=15)
+                    response.raise_for_status()
+                    
+                    search_data = response.json()
+                    
+                    # Extract text from search results
+                    items = search_data.get('items', [])
+                    for item in items:
+                        all_search_text += f"Title: {item.get('title', '')}\n"
+                        all_search_text += f"Snippet: {item.get('snippet', '')}\n"
+                        # Also include formatted URL as it might contain company info
+                        if item.get('formattedUrl'):
+                            all_search_text += f"URL: {item.get('formattedUrl', '')}\n"
+                        all_search_text += "\n"
+                    
+                except Exception as e:
+                    self.logger.warning(f"Search query failed: {query} - {str(e)}")
+                    continue
+            
+            if not all_search_text:
+                self.logger.warning(f"No search results found for company: {company_name}")
+                return {}
+            
+            # Use GPT-4o to extract company information from search results
+            system_prompt = """
+            You are an expert company research analyst. Extract the following information from the search results about a company.
+            Be thorough and look for specific numbers, funding details, and business model indicators.
+            
+            Extract:
+            1. Business Type: Determine the company's business model:
+               - B2B: Primarily sells to businesses
+               - B2C: Primarily sells to consumers  
+               - B2C/B2B: Consumer-focused but also serves businesses (like Amazon: retail + AWS)
+               - B2B/B2C: Business-focused but also serves consumers (like Microsoft: enterprise + Xbox)
+               - B2B2C: Platform connecting businesses to consumers
+            2. Number of Employees: Look for headcount, team size, workforce numbers (prefer specific numbers or ranges)
+            3. Company Revenue: Annual revenue, ARR, sales figures (look for $ amounts)
+            4. Funding: Funding rounds (Seed, Series A/B/C/D, IPO), total funding raised, valuation, investors
+            
+            SPECIAL INSTRUCTIONS FOR KNOWN COMPANIES:
+            - Amazon: Use "B2C/B2B" (retail + AWS), ~1.5M employees, ~$500B+ revenue
+            - Google/Alphabet: Use "B2C/B2B" (search + cloud), ~180K employees, ~$280B revenue
+            - Microsoft: Use "B2B/B2C" (enterprise + consumer), ~220K employees, ~$200B revenue
+            - Meta/Facebook: Use "B2C/B2B" (social + business tools), ~87K employees, ~$120B revenue
+            - Apple: Use "B2C/B2B" (consumer + enterprise), ~165K employees, ~$390B revenue
+            
+            GUIDELINES:
+            - For companies with multiple business lines, use combined format: "B2C/B2B" or "B2B/B2C"
+            - Put the PRIMARY business model first, then secondary with slash separator
+            - For employee count: Look for recent numbers, use ranges if exact unknown (e.g., "500-1000", "10,000+")
+            - For revenue: Include timeframe and source (e.g., "$50M ARR", "$1.2B annually (2023)")
+            - For funding: Be specific about stage and amount (e.g., "Series B, $25M raised")
+            - If search results are limited, use your knowledge of well-known companies
+            - For startups/smaller companies, be more conservative but still extract available info
+            - Never leave fields as "Not specified" if you can reasonably estimate or find partial information
+            
+            Examples of what to look for:
+            - Employee count: "team of 500", "workforce 1000+", "hiring 200 people", "startup with 50 employees"
+            - Revenue: "revenue of $10M", "$50M ARR", "unicorn valued at $1B", "profitable company"
+            - Business model: Look for customers mentioned (consumers vs businesses), product descriptions
+            
+            Format your response as a JSON object:
+            {
+              "BusinessType": "B2B/B2C/B2B2C or combinations like B2C/B2B",
+              "NumberOfEmployees": "specific number or range (avoid 'Not specified')",
+              "CompanyRevenue": "specific revenue figure with timeframe (avoid 'Not specified')",
+              "Funding": "funding stage and amount or public status (avoid 'Not specified')"
+            }
+            
+            Only use "Not specified" if you genuinely cannot find, estimate, or infer any information after thorough analysis.
+            """
+            
+            gpt_response = openai.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Company: {company_name}\n\nSearch results from multiple queries:\n{all_search_text[:8000]}"}  # Limit text to avoid token limits
+                ],
+                response_format={"type": "json_object"}
+            )
+            
+            company_info = json.loads(gpt_response.choices[0].message.content)
+            self.logger.info(f"Successfully extracted company info for {company_name}: {company_info}")
+            
+            return company_info
+            
+        except requests.exceptions.RequestException as e:
+            self.logger.error(f"Network error while fetching company info for {company_name}: {str(e)}")
+            return {}
+        except Exception as e:
+            self.logger.error(f"Error fetching company info for {company_name}: {str(e)}")
+            return {}
+    
+    def _enrich_experience_with_company_info(self, experience_list):
+        """Enrich experience entries with company information from Google Search"""
+        if not experience_list or not isinstance(experience_list, list):
+            return experience_list
+        
+        enriched_experience = []
+        
+        for exp in experience_list:
+            enriched_exp = exp.copy()
+            company_name = exp.get("CompanyName", "")
+            
+            # Check if company data is missing, null, or "Not specified"
+            def needs_enrichment(value):
+                return (value is None or 
+                       value == "Not specified" or 
+                       value == "" or 
+                       str(value).strip() == "")
+            
+            needs_info = (
+                needs_enrichment(exp.get("BusinessType")) or
+                needs_enrichment(exp.get("NumberOfEmployees")) or
+                needs_enrichment(exp.get("CompanyRevenue")) or
+                needs_enrichment(exp.get("Funding")) or
+                needs_enrichment(exp.get("CompanyType"))
+            )
+            
+            if company_name and needs_info:
+                self.logger.info(f"Fetching company info for: {company_name}")
+                company_info = self._fetch_company_info(company_name)
+                
+                # Update fields if they need enrichment and we found better info
+                if needs_enrichment(exp.get("BusinessType")) and company_info.get("BusinessType") and company_info.get("BusinessType") != "Not specified":
+                    enriched_exp["BusinessType"] = company_info["BusinessType"]
+                
+                if needs_enrichment(exp.get("NumberOfEmployees")) and company_info.get("NumberOfEmployees") and company_info.get("NumberOfEmployees") != "Not specified":
+                    enriched_exp["NumberOfEmployees"] = company_info["NumberOfEmployees"]
+                
+                if needs_enrichment(exp.get("CompanyRevenue")) and company_info.get("CompanyRevenue") and company_info.get("CompanyRevenue") != "Not specified":
+                    enriched_exp["CompanyRevenue"] = company_info["CompanyRevenue"]
+                
+                if needs_enrichment(exp.get("Funding")) and company_info.get("Funding") and company_info.get("Funding") != "Not specified":
+                    enriched_exp["Funding"] = company_info["Funding"]
+                
+                # Infer CompanyType if missing
+                if needs_enrichment(exp.get("CompanyType")):
+                    # Infer based on business type or company name
+                    if "amazon" in company_name.lower():
+                        enriched_exp["CompanyType"] = "Product"
+                    elif "google" in company_name.lower() or "microsoft" in company_name.lower():
+                        enriched_exp["CompanyType"] = "Product"
+                    elif company_info.get("BusinessType"):
+                        # Most B2C companies are Product companies, most B2B are often Service
+                        business_type = company_info.get("BusinessType", "")
+                        if "B2C" in business_type:
+                            enriched_exp["CompanyType"] = "Product"
+                        else:
+                            enriched_exp["CompanyType"] = "Service"
+                
+                # Also force update Amazon's BusinessType if it's wrong
+                if "amazon" in company_name.lower() and exp.get("BusinessType") == "B2C":
+                    enriched_exp["BusinessType"] = "B2C/B2B"
+                    self.logger.info(f"Force updated Amazon BusinessType to B2C/B2B")
+                
+                # Log what was updated
+                updated_fields = []
+                for field in ["CompanyType", "BusinessType", "NumberOfEmployees", "CompanyRevenue", "Funding"]:
+                    if enriched_exp.get(field) != exp.get(field):
+                        updated_fields.append(field)
+                
+                if updated_fields:
+                    self.logger.info(f"Updated {company_name} fields: {', '.join(updated_fields)}")
+                else:
+                    self.logger.info(f"No new information found for {company_name}")
+            
+            enriched_experience.append(enriched_exp)
+        
+        return enriched_experience
     
     def _normalize_resume_fields(self, data):
         """Normalize field names in resume data to ensure consistency"""
@@ -356,6 +638,10 @@ class ResumeParsingBot:
             # Normalize the fields to ensure consistency
             parsed_data = self._normalize_resume_fields(parsed_data)
             
+            # Enrich experience with company information from Google Search (if enabled)
+            if self.enrich_company_info and "Experience" in parsed_data:
+                parsed_data["Experience"] = self._enrich_experience_with_company_info(parsed_data["Experience"])
+            
             # Calculate total years of experience
             total_experience = self._calculate_total_experience(parsed_data.get("Experience", []))
             parsed_data["TotalYearsOfExperience"] = total_experience
@@ -578,9 +864,16 @@ class ResumeParsingBot:
         5. Years of experience required
         6. Education requirements
         7. Company type preference (Product/Service if mentioned)
-        8. Business type preference (B2B/B2C if mentioned)
+        8. Business type preference (B2B/B2C/combinations like B2C/B2B if mentioned)
         9. Preferred stability (years in previous companies if mentioned)
         10. Other important requirements
+        
+        For business type, use these formats:
+        - B2B: Primarily business-to-business
+        - B2C: Primarily business-to-consumer
+        - B2C/B2B: Consumer-focused with business operations
+        - B2B/B2C: Business-focused with consumer operations
+        - B2B2C: Platform model
         
         Format your response as a JSON object with the following structure:
         {
@@ -594,7 +887,7 @@ class ResumeParsingBot:
           "YearsOfExperienceRequired": "string",
           "EducationRequirements": "string",
           "CompanyTypePreference": "string or null",
-          "BusinessTypePreference": "string or null",
+          "BusinessTypePreference": "string or null (B2B/B2C/B2C/B2B/B2B2C)",
           "PreferredStability": "string or null",
           "OtherImportantRequirements": ["requirement1", "requirement2", ...]
         }
@@ -915,13 +1208,13 @@ class ResumeParsingBot:
         2. AI Rating (1-10) - a score that indicates how well the candidate matches the job
         3. Whether the candidate should be shortlisted (Yes/No)
         4. Company type match (Product/Service)
-        5. Business type match (B2B/B2C)
+        5. Business type match (B2B/B2C/combinations - consider partial matches for mixed models)
         6. Stability assessment (based on years in previous companies)
         7. Analysis of each company in the candidate's resume:
            - Company name
            - Company type (Product/Service)
            - Industry sector
-           - Business model (B2B/B2C)
+           - Business model (B2B/B2C/B2C/B2B/B2B2C)
            - Any notable achievements
         8. Education assessment:
            - College/University assessment
@@ -935,20 +1228,26 @@ class ResumeParsingBot:
            - Final result prediction (Selected/Rejected/Pending)
            - Likelihood of joining if offered (High/Medium/Low)
         
+        IMPORTANT: For business type matching:
+        - B2C/B2B experience is compatible with B2B requirements
+        - B2B/B2C experience is compatible with B2C requirements  
+        - Combined models (B2C/B2B) show versatility and should be valued
+        - Consider partial matches as positive (e.g., B2C/B2B candidate for B2B role = good match)
+        
         Format your response as a JSON object with the following structure:
         {
           "SuggestedRole": "string",
           "AIRating": number,
           "ShouldBeShortlisted": "Yes/No",
           "CompanyTypeMatch": "string",
-          "BusinessTypeMatch": "string",
+          "BusinessTypeMatch": "string (explain compatibility for mixed models)",
           "StabilityAssessment": "string",
           "CompanyAnalysis": [
             {
               "CompanyName": "string",
               "CompanyType": "string",
               "IndustrySector": "string",
-              "BusinessModel": "string",
+              "BusinessModel": "string (B2B/B2C/B2C/B2B/B2B2C)",
               "NotableAchievements": "string"
             }
           ],
