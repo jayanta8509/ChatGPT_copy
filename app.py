@@ -908,6 +908,50 @@ class ResumeParsingBot:
             # Normalize the fields to ensure consistency
             parsed_data = self._normalize_jd_fields(parsed_data)
             
+            # Enrich company type preference with Google search if missing
+            company_name = parsed_data.get("CompanyName")
+            company_type_pref = parsed_data.get("CompanyTypePreference")
+            
+            # Check if company type preference needs enrichment
+            def needs_enrichment(value):
+                return (value is None or 
+                       value == "Not specified" or 
+                       value == "" or 
+                       str(value).strip() == "" or
+                       value == "null")
+            
+            if company_name and needs_enrichment(company_type_pref) and self.enrich_company_info:
+                self.logger.info(f"Company type preference not found in JD. Searching for: {company_name}")
+                company_info = self._fetch_company_info(company_name)
+                
+                if company_info:
+                    # Infer company type from the business model and other information
+                    business_type = company_info.get("BusinessType", "")
+                    
+                    # Determine if it's a Product or Service company based on business type and known patterns
+                    if "amazon" in company_name.lower():
+                        parsed_data["CompanyTypePreference"] = "Product"
+                    elif "google" in company_name.lower() or "microsoft" in company_name.lower() or "apple" in company_name.lower() or "meta" in company_name.lower():
+                        parsed_data["CompanyTypePreference"] = "Product"
+                    elif business_type:
+                        # General heuristic: B2C companies are often Product companies
+                        if "B2C" in business_type:
+                            parsed_data["CompanyTypePreference"] = "Product"
+                        else:
+                            # Most B2B companies can be either, but we'll default to Service unless specifically known
+                            parsed_data["CompanyTypePreference"] = "Service"
+                    
+                    # Also update business type preference if missing
+                    business_type_pref = parsed_data.get("BusinessTypePreference")
+                    if needs_enrichment(business_type_pref) and business_type:
+                        parsed_data["BusinessTypePreference"] = business_type
+                        self.logger.info(f"Updated business type preference for {company_name}: {business_type}")
+                    
+                    if parsed_data.get("CompanyTypePreference") != company_type_pref:
+                        self.logger.info(f"Updated company type preference for {company_name}: {parsed_data.get('CompanyTypePreference')}")
+                else:
+                    self.logger.info(f"No company information found for {company_name}")
+            
             # Add file information
             file_name = os.path.basename(jd_file_path)
             parsed_data["jd_file"] = file_name
