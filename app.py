@@ -1220,7 +1220,7 @@ class ResumeParsingBot:
            - College/University assessment
            - Course relevance
         9. Anything missing as per expectations in the JD
-        10. Overall recommendation (detailed assessment)
+        10. Overall recommendation (concise summary in maximum 25 words)
         11. Candidate status prediction:
            - Should be AI shortlisted (Yes/No)
            - Should be internally shortlisted (Yes/No)
@@ -1256,7 +1256,7 @@ class ResumeParsingBot:
             "CourseRelevance": "string"
           },
           "MissingExpectations": ["string"],
-          "OverallRecommendation": "string",
+          "OverallRecommendation": "string (maximum 25 words - concise summary)",
           "AIShortlisted": "Yes/No",
           "InternalShortlisted": "Yes/No",
           "InterviewInProcess": "Yes/No",
