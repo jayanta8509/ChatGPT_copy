@@ -564,16 +564,16 @@ class ResumeParsingBot:
         system_prompt = """
         You are an expert resume parser. Extract the following information from the resume:
         1. Candidate's full name
-        2. Email address
+        2. Email address (check personal email, work emails, LinkedIn profiles)
         3. Phone number
         4. Skills (list all technical and soft skills)
         5. For each company experience:
-           - Company name
+           - Company name (LOOK CAREFULLY - check email domains, LinkedIn URLs, official company names, subsidiaries)
            - Position/role
            - Duration (specify EXACT start date and end date in the same format they appear in the resume)
-           - Whether it's a product or service company
-           - Business type (B2B or B2C if discernible)
-           - Number of employees (if mentioned or can be inferred)
+           - Whether it's a product or service company (infer from company name and context if not explicit)
+           - Business type (B2B or B2C - infer from company name and industry if not explicit)
+           - Number of employees (if mentioned or can be inferred from company knowledge)
            - Company revenue or turnover (if mentioned)
            - Funding received and type of funding (if mentioned)
            - Company main location
@@ -583,6 +583,37 @@ class ResumeParsingBot:
            - Graduation year
         7. Overall stability assessment (years staying in previous companies)
         
+        IMPORTANT INSTRUCTIONS FOR COMPANY DETECTION:
+        - Look for company names in work email addresses (e.g., @tcs.com suggests TCS)
+        - Check LinkedIn URLs or profile mentions
+        - Look for official company names, even if abbreviated (e.g., TCS = Tata Consultancy Services)
+        - Identify subsidiaries and parent companies
+        - If you recognize a company name, infer the company type and business type based on your knowledge
+        
+        COMPANY TYPE INFERENCE RULES:
+        - TCS, Tata Consultancy Services, Infosys, Wipro, Accenture, Cognizant, IBM = Service companies
+        - Amazon, Google, Microsoft, Apple, Meta, Netflix, Spotify = Product companies
+        - Banks (JPMorgan, HDFC, ICICI), Consulting firms = Service companies
+        - Software products, E-commerce, SaaS platforms, Gaming companies = Product companies
+        - Startups with apps/platforms = Product companies
+        - IT Services, Consulting, Outsourcing = Service companies
+        
+        BUSINESS TYPE INFERENCE RULES:
+        - IT Services companies (TCS, Infosys, Wipro) = B2B
+        - E-commerce (Amazon, Flipkart) = B2C/B2B
+        - Enterprise software (Microsoft, Oracle) = B2B/B2C
+        - Social media (Meta, Twitter) = B2C/B2B
+        - Consumer products (Apple, Samsung) = B2C/B2B
+        - Banking and Financial Services = B2C/B2B
+        - Gaming companies = B2C
+        - SaaS platforms = B2B
+        
+        FORMAT GUIDELINES:
+        - For business type combinations: Primary model first, then secondary (e.g., "B2C/B2B" for consumer-first companies)
+        - Use B2B for pure enterprise services
+        - Use B2C for pure consumer services
+        - Use combinations for mixed models
+        
         Format your response as a JSON object with the following structure:
         {
           "CandidateFullName": "string",
@@ -591,14 +622,14 @@ class ResumeParsingBot:
           "Skills": ["skill1", "skill2", ...],
           "Experience": [
             {
-              "CompanyName": "string",
+              "CompanyName": "string (extract carefully from any source)",
               "Position": "string",
               "Duration": {
                 "StartDate": "string (EXACT as in resume)",
                 "EndDate": "string (EXACT as in resume)"
               },
-              "CompanyType": "string",
-              "BusinessType": "string",
+              "CompanyType": "Product/Service (infer if not explicit)",
+              "BusinessType": "B2B/B2C/B2C/B2B/B2B2C (infer if not explicit)",
               "NumberOfEmployees": "string or null",
               "CompanyRevenue": "string or null",
               "Funding": "string or null",
@@ -615,12 +646,20 @@ class ResumeParsingBot:
           "StabilityAssessment": "string"
         }
         
+        EXAMPLES OF INFERENCE:
+        - If resume mentions "worked at TCS" → CompanyName: "TCS", CompanyType: "Service", BusinessType: "B2B"
+        - If email is "john@amazon.com" → CompanyName: "Amazon", CompanyType: "Product", BusinessType: "B2C/B2B"
+        - If mentions "Google India" → CompanyName: "Google", CompanyType: "Product", BusinessType: "B2C/B2B"
+        - If mentions "JPMorgan Chase" → CompanyName: "JPMorgan Chase", CompanyType: "Service", BusinessType: "B2C/B2B"
+        - If mentions "Flipkart" → CompanyName: "Flipkart", CompanyType: "Product", BusinessType: "B2C/B2B"
+        
         IMPORTANT INSTRUCTIONS:
         1. Extract dates EXACTLY as they appear in the resume without reformatting
         2. For Duration, maintain the exact format from the resume (e.g., "Jan 2020 - Mar 2022", "2019-Present")
         3. If a field is not present or cannot be determined, use null rather than making assumptions
-        4. Do not add extra fields that aren't in the resume
+        4. However, for well-known companies, DO infer CompanyType and BusinessType based on your knowledge
         5. For company information like size and revenue, only include if explicitly mentioned
+        6. Be aggressive about finding company names from any source in the resume
         """
         
         try:
@@ -857,16 +896,36 @@ class ResumeParsingBot:
         # Use GPT-4o to extract structured information
         system_prompt = """
         You are an expert job description analyst. Extract the following information:
-        1. Company name (if mentioned)
+        1. Company name (LOOK CAREFULLY - check email domains, headers, footers, "About us" sections, contact info, company references, brand mentions)
         2. Job title
         3. Job location (city, country, remote status)
         4. Required skills (technical and soft skills)
         5. Years of experience required
         6. Education requirements
-        7. Company type preference (Product/Service if mentioned)
-        8. Business type preference (B2B/B2C/combinations like B2C/B2B if mentioned)
+        7. Company type preference (Product/Service - if not explicitly mentioned, infer from company name and context)
+        8. Business type preference (B2B/B2C/combinations like B2C/B2B - if not mentioned, infer from company name and job context)
         9. Preferred stability (years in previous companies if mentioned)
         10. Other important requirements
+        
+        IMPORTANT INSTRUCTIONS FOR COMPANY DETECTION:
+        - Look for company names in email addresses (e.g., @tcs.com suggests TCS)
+        - Check headers, footers, letterheads, or signatures
+        - Look for phrases like "About [Company]", "Join [Company]", "At [Company]"
+        - Check for brand names, subsidiary names, or parent company references
+        - If you find a company name, try to infer the company type and business type based on your knowledge
+        
+        COMPANY TYPE INFERENCE RULES:
+        - TCS, Tata Consultancy Services, Infosys, Wipro, Accenture, Cognizant = Service companies
+        - Amazon, Google, Microsoft, Apple, Meta, Netflix = Product companies
+        - Banks, Consulting firms, IT Services = Service companies
+        - Software products, E-commerce, SaaS platforms = Product companies
+        
+        BUSINESS TYPE INFERENCE RULES:
+        - IT Services companies (TCS, Infosys) = B2B
+        - E-commerce (Amazon retail) = B2C/B2B
+        - Enterprise software (Microsoft) = B2B/B2C
+        - Social media (Meta) = B2C/B2B
+        - Consumer products (Apple) = B2C/B2B
         
         For business type, use these formats:
         - B2B: Primarily business-to-business
@@ -877,7 +936,7 @@ class ResumeParsingBot:
         
         Format your response as a JSON object with the following structure:
         {
-          "CompanyName": "string or null",
+          "CompanyName": "string (extract from any source in JD) or null if genuinely not found",
           "JobTitle": "string",
           "JobLocation": "string",
           "RequiredSkills": {
@@ -886,11 +945,16 @@ class ResumeParsingBot:
           },
           "YearsOfExperienceRequired": "string",
           "EducationRequirements": "string",
-          "CompanyTypePreference": "string or null",
-          "BusinessTypePreference": "string or null (B2B/B2C/B2C/B2B/B2B2C)",
+          "CompanyTypePreference": "Product/Service (infer if not explicit) or null",
+          "BusinessTypePreference": "B2B/B2C/B2C/B2B/B2B2C (infer if not explicit) or null",
           "PreferredStability": "string or null",
           "OtherImportantRequirements": ["requirement1", "requirement2", ...]
         }
+        
+        EXAMPLES OF INFERENCE:
+        - If JD mentions "tcs.com" email → CompanyName: "TCS", CompanyTypePreference: "Service", BusinessTypePreference: "B2B"
+        - If JD mentions "amazon.com" → CompanyName: "Amazon", CompanyTypePreference: "Product", BusinessTypePreference: "B2C/B2B"
+        - If JD mentions "google.com" → CompanyName: "Google", CompanyTypePreference: "Product", BusinessTypePreference: "B2C/B2B"
         """
         
         try:
@@ -918,39 +982,74 @@ class ResumeParsingBot:
                        value == "Not specified" or 
                        value == "" or 
                        str(value).strip() == "" or
-                       value == "null")
+                       value == "null" or
+                       str(value).lower() == "not mentioned")
             
-            if company_name and needs_enrichment(company_type_pref) and self.enrich_company_info:
-                self.logger.info(f"Company type preference not found in JD. Searching for: {company_name}")
-                company_info = self._fetch_company_info(company_name)
+            # Try to search for company info if company type is missing
+            if needs_enrichment(company_type_pref) and self.enrich_company_info:
+                # If no company name detected, try to extract it from JD text more aggressively
+                if not company_name or company_name == "Not found":
+                    # Use GPT to extract company name from JD text more aggressively
+                    company_extraction_prompt = """
+                    Extract the company name from this job description text. Look for:
+                    - Company names mentioned anywhere in the text
+                    - "About us" or "About the company" sections
+                    - Email domains that might indicate company names
+                    - Any brand names or organization names
+                    
+                    Return only the company name or "Not found" if no company is mentioned.
+                    """
+                    
+                    try:
+                        company_response = openai.chat.completions.create(
+                            model="gpt-4o",
+                            messages=[
+                                {"role": "system", "content": company_extraction_prompt},
+                                {"role": "user", "content": jd_text}
+                            ]
+                        )
+                        extracted_company = company_response.choices[0].message.content.strip()
+                        if extracted_company and extracted_company.lower() != "not found":
+                            company_name = extracted_company
+                            parsed_data["CompanyName"] = company_name
+                            self.logger.info(f"Extracted company name from JD: {company_name}")
+                    except Exception as e:
+                        self.logger.warning(f"Failed to extract company name: {str(e)}")
                 
-                if company_info:
-                    # Infer company type from the business model and other information
-                    business_type = company_info.get("BusinessType", "")
+                # Now search for company info if we have a company name
+                if company_name and company_name != "Not found":
+                    self.logger.info(f"Company type preference not found in JD. Searching for: {company_name}")
+                    company_info = self._fetch_company_info(company_name)
                     
-                    # Determine if it's a Product or Service company based on business type and known patterns
-                    if "amazon" in company_name.lower():
-                        parsed_data["CompanyTypePreference"] = "Product"
-                    elif "google" in company_name.lower() or "microsoft" in company_name.lower() or "apple" in company_name.lower() or "meta" in company_name.lower():
-                        parsed_data["CompanyTypePreference"] = "Product"
-                    elif business_type:
-                        # General heuristic: B2C companies are often Product companies
-                        if "B2C" in business_type:
+                    if company_info:
+                        # Determine if it's a Product or Service company based on business type and known patterns
+                        if "amazon" in company_name.lower():
                             parsed_data["CompanyTypePreference"] = "Product"
-                        else:
-                            # Most B2B companies can be either, but we'll default to Service unless specifically known
+                        elif "google" in company_name.lower() or "microsoft" in company_name.lower() or "apple" in company_name.lower() or "meta" in company_name.lower():
+                            parsed_data["CompanyTypePreference"] = "Product"
+                        elif any(term in company_name.lower() for term in ["tcs", "tata consultancy", "tata consultancy services"]):
                             parsed_data["CompanyTypePreference"] = "Service"
-                    
-                    # Also update business type preference if missing
-                    business_type_pref = parsed_data.get("BusinessTypePreference")
-                    if needs_enrichment(business_type_pref) and business_type:
-                        parsed_data["BusinessTypePreference"] = business_type
-                        self.logger.info(f"Updated business type preference for {company_name}: {business_type}")
-                    
-                    if parsed_data.get("CompanyTypePreference") != company_type_pref:
-                        self.logger.info(f"Updated company type preference for {company_name}: {parsed_data.get('CompanyTypePreference')}")
+                        elif company_info.get("BusinessType"):
+                            # General heuristic: B2C companies are often Product companies
+                            business_type = company_info.get("BusinessType", "")
+                            if "B2C" in business_type:
+                                parsed_data["CompanyTypePreference"] = "Product"
+                            else:
+                                # Most B2B companies can be either, but we'll default to Service unless specifically known
+                                parsed_data["CompanyTypePreference"] = "Service"
+                        
+                        # Also update business type preference if missing
+                        business_type_pref = parsed_data.get("BusinessTypePreference")
+                        if needs_enrichment(business_type_pref) and business_type:
+                            parsed_data["BusinessTypePreference"] = business_type
+                            self.logger.info(f"Updated business type preference for {company_name}: {business_type}")
+                        
+                        if parsed_data.get("CompanyTypePreference") != company_type_pref:
+                            self.logger.info(f"Updated company type preference for {company_name}: {parsed_data.get('CompanyTypePreference')}")
+                    else:
+                        self.logger.info(f"No company information found for {company_name}")
                 else:
-                    self.logger.info(f"No company information found for {company_name}")
+                    self.logger.info("No company name found in JD, cannot search for company type preference")
             
             # Add file information
             file_name = os.path.basename(jd_file_path)
