@@ -1352,7 +1352,32 @@ class ResumeParsingBot:
         3. Whether the candidate should be shortlisted (Yes/No)
         4. Company type match (Product/Service)
         5. Business type match (B2B/B2C/combinations - consider partial matches for mixed models)
-        6. Stability assessment (based on years in previous companies)
+        6. Stability assessment (comprehensive analysis based on multiple factors):
+           - Individual tenure analysis: Calculate years spent at each company
+           - Company-wise stability insights: Analyze each company's typical employee retention patterns
+           - Industry stability benchmarks: Compare candidate's tenure against industry standards
+           - Attrition pattern analysis: Look for trends in job transitions (frequency, timing, progression)
+           - Company reputation for retention: Consider known attrition rates and employee satisfaction
+           - Stability scoring: Rate overall career stability (1-10) with detailed reasoning (for internal analysis only)
+           - Future stability prediction: Likelihood of staying long-term in the new role
+           
+           For company-wise insights, consider:
+           - Large tech companies (Google, Microsoft, Amazon): Typically 2-4 years average tenure
+           - Startups: Often 1-2 years due to high growth/pivot nature
+           - Consulting firms (TCS, Infosys, Accenture): 2-3 years for early career, 4+ for senior roles
+           - Financial services: Generally 3-5 years average tenure
+           - Product companies: 2-4 years depending on company maturity
+           - Service companies: 2-3 years average, higher for specialized roles
+           
+           Rate stability factors:
+           - Excellent (9-10): 4+ years per company, logical career progression
+           - Good (7-8): 2-4 years per company, clear growth trajectory
+           - Average (5-6): 1-2 years per company, some job hopping but reasonable
+           - Poor (3-4): <1 year per company, frequent changes without clear progression
+           - Very Poor (1-2): Multiple short stints, concerning pattern of instability
+           
+           IMPORTANT: Do NOT include the numerical stability score in the final StabilityAssessment output. 
+           Provide only the descriptive analysis without mentioning "Overall Stability Score" or any numerical rating.
         7. Analysis of each company in the candidate's resume:
            - Company name
            - Company type (Product/Service)
@@ -1363,7 +1388,7 @@ class ResumeParsingBot:
            - College/University assessment
            - Course relevance
         9. Anything missing as per expectations in the JD
-        10. Overall recommendation (concise summary in maximum 25 words)
+        10. Overall recommendation (detailed summary in 2-3 lines)
         11. Candidate status prediction:
            - Should be AI shortlisted (Yes/No)
            - Should be internally shortlisted (Yes/No)
@@ -1377,14 +1402,34 @@ class ResumeParsingBot:
         - Combined models (B2C/B2B) show versatility and should be valued
         - Consider partial matches as positive (e.g., B2C/B2B candidate for B2B role = good match)
         
+        COMPANY TYPE CLASSIFICATION GUIDANCE:
+        For accurate company type classification, use the following guidelines:
+        - Amazon, Google, Microsoft, Apple, Meta, Netflix: Product companies
+        - Moneyview: Product company (fintech with lending products and financial services platform)
+        - Flipkart, Zomato, Paytm, Swiggy: Product companies (platform/app-based)
+        - TCS, Tata Consultancy Services, Infosys, Wipro, Accenture, Cognizant: Service companies
+        - Banks (HDFC, ICICI, SBI), unless they have significant product divisions: Service companies
+        - Startups with apps/platforms/SaaS products: Product companies
+        - IT Services, Consulting, Outsourcing firms: Service companies
+        
+        When determining CompanyTypeMatch:
+        - If all companies in candidate's experience are Product companies: "Product"
+        - If all companies in candidate's experience are Service companies: "Service" 
+        - If candidate has mixed experience (both Product and Service): "Product/Service"
+        
+        CRITICAL: Analyze the CompanyType field in the CompanyAnalysis section you generate. 
+        If ALL companies show CompanyType as "Product", then CompanyTypeMatch MUST be "Product".
+        If ALL companies show CompanyType as "Service", then CompanyTypeMatch MUST be "Service".
+        Only use "Product/Service" when there's a genuine mix of Product and Service companies.
+        
         Format your response as a JSON object with the following structure:
         {
           "SuggestedRole": "string",
           "AIRating": number,
           "ShouldBeShortlisted": "Yes/No",
-          "CompanyTypeMatch": "string",
+          "CompanyTypeMatch": "string (MUST be 'Product' if all CompanyAnalysis entries are Product type, 'Service' if all are Service type, 'Product/Service' only for mixed experience)",
           "BusinessTypeMatch": "string (explain compatibility for mixed models)",
-          "StabilityAssessment": "string",
+          "StabilityAssessment": "string (comprehensive analysis including company-wise insights, tenure patterns, industry benchmarks, and stability scoring)",
           "CompanyAnalysis": [
             {
               "CompanyName": "string",
@@ -1399,7 +1444,7 @@ class ResumeParsingBot:
             "CourseRelevance": "string"
           },
           "MissingExpectations": ["string"],
-          "OverallRecommendation": "string (maximum 25 words - concise summary)",
+          "OverallRecommendation": "string (detailed summary in 2-3 lines)",
           "AIShortlisted": "Yes/No",
           "InternalShortlisted": "Yes/No",
           "InterviewInProcess": "Yes/No",
