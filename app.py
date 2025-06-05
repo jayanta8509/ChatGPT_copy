@@ -1378,6 +1378,8 @@ class ResumeParsingBot:
            
            IMPORTANT: Do NOT include the numerical stability score in the final StabilityAssessment output. 
            Provide only the descriptive analysis without mentioning "Overall Stability Score" or any numerical rating.
+           KEEP THE OUTPUT CONCISE: Limit StabilityAssessment to 2-3 lines maximum while covering key points:
+           tenure analysis, industry benchmarks, career progression pattern, and future stability prediction.
         7. Analysis of each company in the candidate's resume:
            - Company name
            - Company type (Product/Service)
@@ -1429,7 +1431,7 @@ class ResumeParsingBot:
           "ShouldBeShortlisted": "Yes/No",
           "CompanyTypeMatch": "string (MUST be 'Product' if all CompanyAnalysis entries are Product type, 'Service' if all are Service type, 'Product/Service' only for mixed experience)",
           "BusinessTypeMatch": "string (explain compatibility for mixed models)",
-          "StabilityAssessment": "string (comprehensive analysis including company-wise insights, tenure patterns, industry benchmarks, and stability scoring)",
+          "StabilityAssessment": "string (concise 2-3 lines covering tenure analysis, industry benchmarks, career progression, and future stability prediction)",
           "CompanyAnalysis": [
             {
               "CompanyName": "string",
