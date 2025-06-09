@@ -1352,34 +1352,11 @@ class ResumeParsingBot:
         3. Whether the candidate should be shortlisted (Yes/No)
         4. Company type match (Product/Service)
         5. Business type match (B2B/B2C/combinations - consider partial matches for mixed models)
-        6. Stability assessment (comprehensive analysis based on multiple factors):
-           - Individual tenure analysis: Calculate years spent at each company
-           - Company-wise stability insights: Analyze each company's typical employee retention patterns
-           - Industry stability benchmarks: Compare candidate's tenure against industry standards
-           - Attrition pattern analysis: Look for trends in job transitions (frequency, timing, progression)
-           - Company reputation for retention: Consider known attrition rates and employee satisfaction
-           - Stability scoring: Rate overall career stability (1-10) with detailed reasoning (for internal analysis only)
-           - Future stability prediction: Likelihood of staying long-term in the new role
-           
-           For company-wise insights, consider:
-           - Large tech companies (Google, Microsoft, Amazon): Typically 2-4 years average tenure
-           - Startups: Often 1-2 years due to high growth/pivot nature
-           - Consulting firms (TCS, Infosys, Accenture): 2-3 years for early career, 4+ for senior roles
-           - Financial services: Generally 3-5 years average tenure
-           - Product companies: 2-4 years depending on company maturity
-           - Service companies: 2-3 years average, higher for specialized roles
-           
-           Rate stability factors:
-           - Excellent (9-10): 4+ years per company, logical career progression
-           - Good (7-8): 2-4 years per company, clear growth trajectory
-           - Average (5-6): 1-2 years per company, some job hopping but reasonable
-           - Poor (3-4): <1 year per company, frequent changes without clear progression
-           - Very Poor (1-2): Multiple short stints, concerning pattern of instability
-           
-           IMPORTANT: Do NOT include the numerical stability score in the final StabilityAssessment output. 
-           Provide only the descriptive analysis without mentioning "Overall Stability Score" or any numerical rating.
-           KEEP THE OUTPUT CONCISE: Limit StabilityAssessment to 2-3 lines maximum while covering key points:
-           tenure analysis, industry benchmarks, career progression pattern, and future stability prediction.
+        6. Stability assessment (company-wise tenure duration as an array):
+        - For each unique company in the candidate's experience, sum the total tenure duration across all stints at that company.
+        - Provide the company name and the total tenure duration in years (rounded to two decimal places), e.g., "Amazon: 1.16 years".
+        - Output the result as an array of strings, one per unique company, in the order they first appear in the candidate's experience.
+        - Do not include any extra commentary or summary—just the array of company-wise total tenure durations.
         7. Analysis of each company in the candidate's resume:
            - Company name
            - Company type (Product/Service)
@@ -1431,7 +1408,7 @@ class ResumeParsingBot:
           "ShouldBeShortlisted": "Yes/No",
           "CompanyTypeMatch": "string (MUST be 'Product' if all CompanyAnalysis entries are Product type, 'Service' if all are Service type, 'Product/Service' only for mixed experience)",
           "BusinessTypeMatch": "string (explain compatibility for mixed models)",
-          "StabilityAssessment": "string (concise 2-3 lines covering tenure analysis, industry benchmarks, career progression, and future stability prediction)",
+          "StabilityAssessment": ["string (company name and total tenure duration, e.g., 'Amazon: 1.16 years')", ...],
           "CompanyAnalysis": [
             {
               "CompanyName": "string",
