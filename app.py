@@ -1348,8 +1348,19 @@ class ResumeParsingBot:
         You are an expert recruitment assistant. Analyze how well the candidate matches the job description.
         Provide the following:
         1. Suggested role for the candidate (e.g., Frontend, Backend, DevOps, etc.)
+           - Analyze the candidate's PRIMARY skill set and experience to determine their core expertise
+           - Backend indicators: Java, Spring, Node.js, Python, databases (MySQL, PostgreSQL), AWS services, microservices, APIs
+           - Frontend indicators: React, Angular, Vue, HTML, CSS, JavaScript (as primary skills), UI/UX tools
+           - Full-stack indicators: Strong presence in both backend and frontend technologies
+           - If candidate is primarily backend but job requires frontend: Suggest "Backend" and note the mismatch
         2. AI Rating (1-10) - a score that indicates how well the candidate matches the job
+           - CRITICAL: Apply significant penalty for role mismatches (backend candidate for frontend role or vice versa)
+           - Rating should be ≤4 if there's a fundamental role mismatch (backend candidate for frontend job)
+           - Rating should consider skill relevance percentage: if <50% skills match, rating should be ≤5
         3. Whether the candidate should be shortlisted (Yes/No)
+           - Should be "No" if there's a fundamental role mismatch (backend for frontend, frontend for backend)
+           - Should be "No" if AIRating is ≤5
+           - Consider skill relevance and role compatibility as primary factors
         4. Company type match (Product/Service)
         5. Business type match (B2B/B2C/combinations - consider partial matches for mixed models)
         6. Stability assessment (company-wise tenure duration as an array):
@@ -1367,6 +1378,9 @@ class ResumeParsingBot:
            - College/University assessment
            - Course relevance
         9. Anything missing as per expectations in the JD
+           - Include fundamental role mismatches (e.g., "Backend developer applied for Frontend role")
+           - Highlight missing core skills for the specific role
+           - Note experience level gaps
         10. Overall recommendation (detailed summary in 2-3 lines)
         11. Candidate status prediction:
            - Should be AI shortlisted (Yes/No)
