@@ -1353,14 +1353,67 @@ class ResumeParsingBot:
            - Frontend indicators: React, Angular, Vue, HTML, CSS, JavaScript (as primary skills), UI/UX tools
            - Full-stack indicators: Strong presence in both backend and frontend technologies
            - If candidate is primarily backend but job requires frontend: Suggest "Backend" and note the mismatch
-        2. AI Rating (1-10) - a score that indicates how well the candidate matches the job
-           - CRITICAL: Apply significant penalty for role mismatches (backend candidate for frontend role or vice versa)
+        2. AI Rating (1-10) - Calculate using detailed scoring breakdown (Total = 100 points, then convert to 1-10 scale):
+           
+           Scoring Categories:
+           a) Company Type Match (30 points max):
+              - 30 points: Perfect match (Product candidate experience + Product company posting JD, OR Service candidate experience + Service company posting JD)
+              - 20 points: Mixed candidate experience (both Product + Service) matching either type of hiring company
+              - 10 points: Partial mismatch (Product candidate experience + Service company posting JD, OR Service candidate experience + Product company posting JD)
+              - 0 points: Complete mismatch or unclear company types
+           
+           b) Domain Match - Business Type (17 points max):
+              - 17 points: Exact match (B2B to B2B, B2C to B2C)
+              - 12 points: Compatible mixed models (B2C/B2B experience for B2B role)
+              - 8 points: Somewhat relevant
+              - 0 points: No relevance
+           
+           c) Keywords + Skill Set Match (22 points max):
+              - 22 points: 80%+ skills match JD tech stack
+              - 18 points: 60-79% skills match
+              - 14 points: 40-59% skills match
+              - 10 points: 20-39% skills match
+              - 5 points: <20% skills match
+              - 0 points: No relevant skills
+           
+           d) Role Match (10 points max):
+              - 10 points: Exact role match (Frontend to Frontend, Backend to Backend)
+              - 7 points: Related role (Full-stack to Frontend/Backend)
+              - 3 points: Transferable role
+              - 0 points: Fundamental mismatch
+           
+           e) Responsibilities Match (15 points max):
+              - 15 points: Candidate's projects/work clearly maps to JD expectations
+              - 10 points: Partially relevant experience
+              - 5 points: Loosely related
+              - 0 points: No relevant project experience
+           
+           f) College Prestige (3 points max):
+              - 3 points: Top-tier (IIT, NIT, MIT, Stanford, etc.)
+              - 2 points: Good tier (State universities, reputable colleges)
+              - 1 point: Average tier
+              - 0 points: Unknown/lesser-known institutions
+           
+           g) Awards & Recognition (3 points max):
+              - 3 points: Relevant certifications, awards, recognitions related to JD
+              - 1-2 points: Some certifications/awards
+              - 0 points: None mentioned
+           
+           Final AI Rating Conversion:
+           - 90-100 points = AI Rating 9-10
+           - 80-89 points = AI Rating 8
+           - 70-79 points = AI Rating 7
+           - 60-69 points = AI Rating 6
+           - 50-59 points = AI Rating 5
+           - 40-49 points = AI Rating 4
+           - 30-39 points = AI Rating 3
+           - 20-29 points = AI Rating 2
+           - 10-19 points = AI Rating 1
+           - 0-9 points = AI Rating 0
+        3. Whether the candidate should be shortlisted (Yes/No)
+           - Should be "No" if there's a fundamental role mismatch (backend candidate for frontend role or vice versa)
            - Rating should be ≤4 if there's a fundamental role mismatch (backend candidate for frontend job)
            - Rating should consider skill relevance percentage: if <50% skills match, rating should be ≤5
-        3. Whether the candidate should be shortlisted (Yes/No)
-           - Should be "No" if there's a fundamental role mismatch (backend for frontend, frontend for backend)
-           - Should be "No" if AIRating is ≤5
-           - Consider skill relevance and role compatibility as primary factors
         4. Company type match (Product/Service)
         5. Business type match (B2B/B2C/combinations - consider partial matches for mixed models)
         6. Stability assessment (company-wise tenure duration as an array):
