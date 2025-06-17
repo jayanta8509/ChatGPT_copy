@@ -566,23 +566,27 @@ class ResumeParsingBot:
         1. Candidate's full name
         2. Email address (check personal email, work emails, LinkedIn profiles)
         3. Phone number
-        4. Skills (list all technical and soft skills)
+        4. Skills (list all technical skills that base on resume maximum 5 skills)
         5. For each company experience:
            - Company name (LOOK CAREFULLY - check email domains, LinkedIn URLs, official company names, subsidiaries)
            - Position/role
            - Duration (specify EXACT start date and end date in the same format they appear in the resume)
            - Whether it's a product or service company (infer from company name and context if not explicit)
-           - Business type (B2B or B2C - infer from company name and industry if not explicit)
+           - Business type (B2B or B2C or Services - infer from company name and industry if not explicit)
            - Number of employees (if mentioned or can be inferred from company knowledge)
-           - Company revenue or turnover (if mentioned)
            - Funding received and type of funding (if mentioned)
            - Company main location
         6. Education details:
            - College/University name
            - Course/degree
            - Graduation year
-        7. Overall stability assessment (years staying in previous companies)
-        
+        7. Overall stability assessment (years staying in previous companies) 
+         - For each unique company in the candidate's experience, sum the total tenure duration across all stints at that company.
+        - Provide the company name and the total tenure duration in years (rounded to two decimal places), e.g., "Amazon: 1.16 years".
+        - Output the result as an array of strings, one per unique company, in the order they first appear in the candidate's experience.
+        - Do not include any extra commentary or summary—just the array of company-wise total tenure durations.
+         Example:- amazon – June 2017 to January 2019(1.6 year), Google – June 2017 to January 2019(1.6 year) 
+
         IMPORTANT INSTRUCTIONS FOR COMPANY DETECTION:
         - Look for company names in work email addresses (e.g., @tcs.com suggests TCS)
         - Check LinkedIn URLs or profile mentions
@@ -593,26 +597,25 @@ class ResumeParsingBot:
         COMPANY TYPE INFERENCE RULES:
         - TCS, Tata Consultancy Services, Infosys, Wipro, Accenture, Cognizant, IBM = Service companies
         - Amazon, Google, Microsoft, Apple, Meta, Netflix, Spotify = Product companies
-        - Banks (JPMorgan, HDFC, ICICI), Consulting firms = Service companies
+        - Banks (JPMorgan, HDFC, ICICI), Consulting firms = Banking companies
         - Software products, E-commerce, SaaS platforms, Gaming companies = Product companies
         - Startups with apps/platforms = Product companies
         - IT Services, Consulting, Outsourcing = Service companies
         
         BUSINESS TYPE INFERENCE RULES:
-        - IT Services companies (TCS, Infosys, Wipro) = B2B
-        - E-commerce (Amazon, Flipkart) = B2C/B2B
-        - Enterprise software (Microsoft, Oracle) = B2B/B2C
-        - Social media (Meta, Twitter) = B2C/B2B
-        - Consumer products (Apple, Samsung) = B2C/B2B
-        - Banking and Financial Services = B2C/B2B
-        - Gaming companies = B2C
-        - SaaS platforms = B2B
+        - IT Services companies (TCS, Infosys, Wipro) = services
+        - E-commerce (Amazon, Flipkart) = B2C(product)
+        - Enterprise software (Microsoft, Oracle) = B2B(product)
+        - Social media (Meta, Twitter) = B2C(product)
+        - Consumer products (Apple, Samsung) = B2B(product)
+        - Banking and Financial Services = Banking(product)
+        - Gaming companies = B2C/B2B(product)
+        - SaaS platforms = B2B(product)
         
         FORMAT GUIDELINES:
-        - For business type combinations: Primary model first, then secondary (e.g., "B2C/B2B" for consumer-first companies)
-        - Use B2B for pure enterprise services
+        -  Use B2B for pure Saas Companies 
+        - Use B2B for pure enterprise Companies 
         - Use B2C for pure consumer services
-        - Use combinations for mixed models
         
         Format your response as a JSON object with the following structure:
         {
@@ -647,19 +650,17 @@ class ResumeParsingBot:
         }
         
         EXAMPLES OF INFERENCE:
-        - If resume mentions "worked at TCS" → CompanyName: "TCS", CompanyType: "Service", BusinessType: "B2B"
-        - If email is "john@amazon.com" → CompanyName: "Amazon", CompanyType: "Product", BusinessType: "B2C/B2B"
-        - If mentions "Google India" → CompanyName: "Google", CompanyType: "Product", BusinessType: "B2C/B2B"
-        - If mentions "JPMorgan Chase" → CompanyName: "JPMorgan Chase", CompanyType: "Service", BusinessType: "B2C/B2B"
-        - If mentions "Flipkart" → CompanyName: "Flipkart", CompanyType: "Product", BusinessType: "B2C/B2B"
+        - If resume mentions "worked at TCS" → CompanyName: "TCS", CompanyType: "Service"
+        - If email is "john@amazon.com" → CompanyName: "Amazon", CompanyType: "Product", BusinessType: "B2C "
+        - If mentions "Google India" → CompanyName: "Google", CompanyType: "Product", BusinessType: "B2C "
+        - If mentions "JPMorgan Chase" → CompanyName: "JPMorgan Chase", CompanyType: "Banking", BusinessType: "B2B"
+        - If mentions "Flipkart" → CompanyName: "Flipkart", CompanyType: "Product", BusinessType: "B2C "
         
         IMPORTANT INSTRUCTIONS:
         1. Extract dates EXACTLY as they appear in the resume without reformatting
         2. For Duration, maintain the exact format from the resume (e.g., "Jan 2020 - Mar 2022", "2019-Present")
         3. If a field is not present or cannot be determined, use null rather than making assumptions
-        4. However, for well-known companies, DO infer CompanyType and BusinessType based on your knowledge
-        5. For company information like size and revenue, only include if explicitly mentioned
-        6. Be aggressive about finding company names from any source in the resume
+        4. Be aggressive about finding company names from any source in the resume
         """
         
         try:
@@ -902,10 +903,9 @@ class ResumeParsingBot:
         4. Required skills (technical and soft skills)
         5. Years of experience required
         6. Education requirements
-        7. Company type preference (Product/Service - if not explicitly mentioned, infer from company name and context)
+        7. Company type preference (Product (B2B or B2C) /Service - if not explicitly mentioned, infer from company name and context)
         8. Business type preference (B2B/B2C/combinations like B2C/B2B - if not mentioned, infer from company name and job context)
-        9. Preferred stability (years in previous companies if mentioned)
-        10. Other important requirements
+        9. Other important requirements
         
         IMPORTANT INSTRUCTIONS FOR COMPANY DETECTION:
         - Look for company names in email addresses (e.g., @tcs.com suggests TCS)
@@ -917,22 +917,20 @@ class ResumeParsingBot:
         COMPANY TYPE INFERENCE RULES:
         - TCS, Tata Consultancy Services, Infosys, Wipro, Accenture, Cognizant = Service companies
         - Amazon, Google, Microsoft, Apple, Meta, Netflix = Product companies
-        - Banks, Consulting firms, IT Services = Service companies
+        - Banks = Banking  companies
         - Software products, E-commerce, SaaS platforms = Product companies
         
         BUSINESS TYPE INFERENCE RULES:
-        - IT Services companies (TCS, Infosys) = B2B
-        - E-commerce (Amazon retail) = B2C/B2B
-        - Enterprise software (Microsoft) = B2B/B2C
-        - Social media (Meta) = B2C/B2B
-        - Consumer products (Apple) = B2C/B2B
+        - IT Services companies (TCS, Infosys) = Services 
+        - E-commerce (Amazon retail) = B2C
+        - Enterprise software (Microsoft) = B2B
+        - Social media (Meta) = B2C
+        - Consumer products (Apple) = B2B
         
         For business type, use these formats:
         - B2B: Primarily business-to-business
         - B2C: Primarily business-to-consumer
-        - B2C/B2B: Consumer-focused with business operations
-        - B2B/B2C: Business-focused with consumer operations
-        - B2B2C: Platform model
+        - Services : Services companies from technology point of view
         
         Format your response as a JSON object with the following structure:
         {
@@ -952,9 +950,9 @@ class ResumeParsingBot:
         }
         
         EXAMPLES OF INFERENCE:
-        - If JD mentions "tcs.com" email → CompanyName: "TCS", CompanyTypePreference: "Service", BusinessTypePreference: "B2B"
-        - If JD mentions "amazon.com" → CompanyName: "Amazon", CompanyTypePreference: "Product", BusinessTypePreference: "B2C/B2B"
-        - If JD mentions "google.com" → CompanyName: "Google", CompanyTypePreference: "Product", BusinessTypePreference: "B2C/B2B"
+        - If JD mentions "tcs.com" email → CompanyName: "TCS", CompanyTypePreference: "Service"
+        - If JD mentions "amazon.com" → CompanyName: "Amazon", CompanyTypePreference: "Product", BusinessTypePreference: "B2C "
+        - If JD mentions "google.com" → CompanyName: "Google", CompanyTypePreference: "Product", BusinessTypePreference: "B2C "
         """
         
         try:
@@ -1351,8 +1349,10 @@ class ResumeParsingBot:
            - Analyze the candidate's PRIMARY skill set and experience to determine their core expertise
            - Backend indicators: Java, Spring, Node.js, Python, databases (MySQL, PostgreSQL), AWS services, microservices, APIs
            - Frontend indicators: React, Angular, Vue, HTML, CSS, JavaScript (as primary skills), UI/UX tools
-           - Full-stack indicators: Strong presence in both backend and frontend technologies
+           - Testing indicators : Manual testing and automation testing selenium,qtp,Appium,SDET
+           - Devops indicators : AWS Engineer, Azure Engineer, cloud Engineer, Devops Engineer 
            - If candidate is primarily backend but job requires frontend: Suggest "Backend" and note the mismatch
+
         2. AI Rating (1-10) - Calculate using detailed scoring breakdown (Total = 100 points, then convert to 1-10 scale):
            
            Scoring Categories:
@@ -1389,7 +1389,7 @@ class ResumeParsingBot:
               - 0 points: No relevant project experience
            
            f) College Prestige (3 points max):
-              - 3 points: Top-tier (IIT, NIT, MIT, Stanford, etc.)
+              - 3 points: Top-tier (IIT, NIT, MIT, BITS Stanford, etc.)
               - 2 points: Good tier (State universities, reputable colleges)
               - 1 point: Average tier
               - 0 points: Unknown/lesser-known institutions
@@ -1425,16 +1425,17 @@ class ResumeParsingBot:
            - Company name
            - Company type (Product/Service)
            - Industry sector
-           - Business model (B2B/B2C/B2C/B2B/B2B2C)
+           - Business model (B2B/B2C)
            - Any notable achievements
         8. Education assessment:
            - College/University assessment
            - Course relevance
         9. Anything missing as per expectations in the JD
-           - Include fundamental role mismatches (e.g., "Backend developer applied for Frontend role")
+           - Include fundamental role mismatches 
+         - Include responsibilities mismatches
            - Highlight missing core skills for the specific role
            - Note experience level gaps
-        10. Overall recommendation (detailed summary in 2-3 lines)
+        10. Overall recommendation (detailed summary in 3-4 lines)
         11. Candidate status prediction:
            - Should be AI shortlisted (Yes/No)
            - Should be internally shortlisted (Yes/No)
@@ -1444,20 +1445,16 @@ class ResumeParsingBot:
         
         IMPORTANT: For business type matching:
         - B2C/B2B experience is compatible with B2B requirements
-        - B2B/B2C experience is compatible with B2C requirements  
-        - Combined models (B2C/B2B) show versatility and should be valued
-        - Consider partial matches as positive (e.g., B2C/B2B candidate for B2B role = good match)
-        
+        - B2B/B2C experience is compatible with B2C requirements 
+         - Services experience is compatible with Services requirements        
         COMPANY TYPE CLASSIFICATION GUIDANCE:
         For accurate company type classification, use the following guidelines:
         - Amazon, Google, Microsoft, Apple, Meta, Netflix: Product companies
         - Moneyview: Product company (fintech with lending products and financial services platform)
         - Flipkart, Zomato, Paytm, Swiggy: Product companies (platform/app-based)
         - TCS, Tata Consultancy Services, Infosys, Wipro, Accenture, Cognizant: Service companies
-        - Banks (HDFC, ICICI, SBI), unless they have significant product divisions: Service companies
-        - Startups with apps/platforms/SaaS products: Product companies
-        - IT Services, Consulting, Outsourcing firms: Service companies
-        
+        - Banks (HDFC, ICICI, SBI), unless they have significant product divisions: Banking companies
+        - Startups with apps/platforms/SaaS products: Product companies        
         When determining CompanyTypeMatch:
         - If all companies in candidate's experience are Product companies: "Product"
         - If all companies in candidate's experience are Service companies: "Service" 
